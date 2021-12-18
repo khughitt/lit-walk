@@ -14,6 +14,9 @@ from bibtexparser.bparser import BibTexParser
 class LitTool:
     def __init__(self):
         """Initializes a new LitTool instance."""
+        # setting logging
+        self._setup_logger()
+
         # config dir
         if os.getenv('XDG_CONFIG_HOME'):
             self._conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit")
@@ -28,6 +31,14 @@ class LitTool:
 
         # load articles / stats databases
         self._init_db()
+
+    def _setup_logger(self):
+        """Sets up root logger to print messages to STDOUT"""
+        logging.basicConfig(stream=sys.stdout, 
+                            format='[%(levelname)s] %(message)s',
+                            level=logging.DEBUG)
+
+        self._logger = logging.getLogger('lit')
 
     def _init_db(self):
         """
@@ -90,7 +101,7 @@ class LitTool:
             times_read integer DEFAULT 0 NOT NULL
         );
         """
-        logging.info("Creating articles table...")
+        self._logger.info("Creating articles table...")
 
         try:
             cursor.execute(sql)
@@ -109,7 +120,7 @@ class LitTool:
             times_reviewed integer
         );
         """
-        logging.info("Creating stats table...")
+        self._logger.info("Creating stats table...")
 
         try:
             cursor.execute(sql)
@@ -120,7 +131,7 @@ class LitTool:
         """
         Imports and parses a bibtex reference file
         """
-        logging.info(f"Importing references from BibTeX file: {infile}")
+        self._logger.info(f"Importing references from BibTeX file: {infile}")
 
         if not os.path.exists(infile):
             raise Exception("No Bibtex file found at specified path!")
@@ -134,7 +145,7 @@ class LitTool:
 
         if len(articles) < len(bd.entries):
             num_missing = len(bd.entries) - len(articles)
-            logging.warn(f"Excluding {num_missing} articles with no associated DOI")
+            self._logger.warn(f"Excluding {num_missing} articles with no associated DOI")
 
         # get a list of existing articles
         cur = self.db.cursor()
@@ -148,12 +159,12 @@ class LitTool:
 
         if num_before != num_after:
             num_removed = num_before - num_after
-            logging.warn(f"Excluding {num_removed} articles already present in collection")
+            self._logger.warn(f"Excluding {num_removed} articles already present in collection")
 
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
         if num_after > 0:
-            logging.info(f"Adding {num_after} new articles..")
+            self._logger.info(f"Adding {num_after} new articles..")
 
             fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
                     "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
@@ -167,7 +178,7 @@ class LitTool:
 
                 self.add_article(cur, tuple(entry.values()))
             
-            logging.info(f"Finished!")
+            self._logger.info(f"Finished!")
 
         cur.close()
 
@@ -178,12 +189,43 @@ class LitTool:
 
         self.db.commit()
 
+    def info(self):
+        """Returns basic information about lit setup"""
+        # determine how many articles are missing doi/absract/keywords
+        cur = self.db.cursor()
+
+        missing_doi = cur.execute("SELECT COUNT(*) FROM articles WHERE doi IS NULL;").fetchall()[0][0]
+        missing_abstract = cur.execute("SELECT COUNT(*) FROM articles WHERE abstract IS NULL;").fetchall()[0][0]
+        missing_keywords = cur.execute("SELECT COUNT(*) FROM articles WHERE keywords IS NULL;").fetchall()[0][0]
+
+        cur.close()
+
+        return {
+            "num_articles": self.num_articles(),
+            "missing": {
+                "doi": missing_doi,
+                "abstract": missing_abstract,
+                "keywords": missing_keywords
+            }
+        }
+
+    def num_articles(self):
+        """Returns the number of articles present in the user's collection"""
+        cur = self.db.cursor()
+        cur.execute("SELECT COUNT(id) FROM articles;")
+
+        num_articles = cur.fetchall()[0][0]
+
+        cur.close()
+
+        return num_articles
+
     def _load_config(self):
         """Loads user config / creates one if none exists"""
         infile = os.path.expanduser(os.path.join(self._conf_dir, "config.yml"))
 
         if not os.path.exists(infile):
-            logging.info(f"Generating a new configuration at {infile}...")
+            self._logger.info(f"Generating a new configuration at {infile}...")
             self._create_config(infile)
 
         with open(infile) as fp:
