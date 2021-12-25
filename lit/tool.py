@@ -8,6 +8,7 @@ import yaml
 import logging
 import sqlite3
 import sys
+import datetime
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
 
@@ -137,9 +138,8 @@ class LitTool:
         sql = """
         CREATE TABLE IF NOT EXISTS stats (
             id integer PRIMARY KEY,
-            topic text,
-            num_articles integer,
-            times_reviewed integer
+            doi text,
+            date timestamp
         );
         """
         self._logger.info("Creating stats table...")
@@ -207,6 +207,11 @@ class LitTool:
         article = cur.fetchall()[0]
         colnames = [x[0] for x in res.description]
         article = dict(zip(colnames, article))
+
+        # update stats; for now, assume article was read (later: prompt user..)
+        res = cur.execute("INSERT INTO stats(doi, date) VALUES (?, ?);",
+                          (article["doi"], datetime.datetime.now()))
+        self.db.commit()
 
         cur.close()
 
