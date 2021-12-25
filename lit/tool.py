@@ -33,12 +33,12 @@ class LitTool:
         self._init_db()
 
     def _setup_logger(self):
-        """Sets up root logger to print messages to STDOUT"""
+        """Sets up logger to print messages to STDOUT"""
         logging.basicConfig(stream=sys.stdout, 
-                            format='[%(levelname)s] %(message)s',
-                            level=logging.DEBUG)
+                            format='[%(levelname)s] %(message)s')
 
         self._logger = logging.getLogger('lit')
+        self._logger.setLevel(logging.DEBUG)
 
     def _init_db(self):
         """
@@ -70,6 +70,28 @@ class LitTool:
             self._create_stats_table(cursor)
 
         cursor.close()
+
+    #  def sync(self):
+    #      """
+    #      Sync lit-tool db & update stats
+    #
+    #      1. add/extend keywords
+    #      """
+    #      pass
+
+    def update_keywords(self):
+        """
+        Updates and extends keywords associated with each article.
+
+        First, a list of all keywords associated with at least one article is
+        inferred.
+
+        Next, the title/abstract of each article is scanned, and any detected keywords which are not already prese
+
+        TODO:
+        - limit to keywords that appear at least N times?
+        - lemmatize keywords and check for keywords in lemmatized space?
+        """
 
     def _create_articles_table(self, cursor):
         """
@@ -127,7 +149,70 @@ class LitTool:
         except sqlite3.Error as e:
             print(e)
 
-    def import_bibtex(self, infile):
+    def _create_topics_table(self, cursor):
+        """
+        Create and <article x topic> matrix?
+            - since topics will change across time, perhaps store in "long" form in sql?
+        """
+        sql = """
+        CREATE TABLE IF NOT EXISTS topics (
+            id integer PRIMARY KEY,
+            topic text,
+            num_articles integer,
+            times_reviewed integer
+        );
+        """
+        self._logger.info("Creating topics table...")
+
+        try:
+            cursor.execute(sql)
+        except sqlite3.Error as e:
+            print(e)
+
+    #  def _sync_topics(self, articles):
+    def _sync_topics(self):
+        """
+        Scans article collection and updates topics table.
+        """
+        articles = self.get_articles()
+
+        breakpoint()
+
+    def get_articles(self):
+        """Retrieves articles table"""
+        cur = self.db.cursor()
+
+        res = cur.execute("SELECT * FROM articles;")
+
+        articles = cur.fetchall()
+
+        colnames = [x[0] for x in res.description]
+
+        article_dicts = []
+
+        for article in articles:
+            article_dicts.append(dict(zip(colnames, article)))
+
+        return article_dicts
+
+    def walk(self):
+        """Chooses an article at random"""
+        num_articles = self.num_articles()
+
+        ind = random.randint(1, num_articles)
+
+        cur = self.db.cursor()
+
+        res = cur.execute(f"SELECT * FROM articles WHERE id={ind};")
+        article = cur.fetchall()[0]
+        colnames = [x[0] for x in res.description]
+        article = dict(zip(colnames, article))
+
+        cur.close()
+
+        return article 
+
+    def import_bibtex(self, infile, debug=False):
         """
         Imports and parses a bibtex reference file
         """
@@ -147,19 +232,22 @@ class LitTool:
             num_missing = len(bd.entries) - len(articles)
             self._logger.warn(f"Excluding {num_missing} articles with no associated DOI")
 
-        # get a list of existing articles
-        cur = self.db.cursor()
-        cur.execute("SELECT doi FROM articles;")
-        
-        existing_dois = cur.fetchall()
+        # exclude existing articles
+        if not debug:
+            cur = self.db.cursor()
+            cur.execute("SELECT doi FROM articles;")
+            
+            existing_dois = cur.fetchall()
 
-        num_before = len(articles)
-        articles = [x for x in articles if x['doi'] not in existing_dois]
-        num_after = len(articles)
+            num_before = len(articles)
+            articles = [x for x in articles if x['doi'] not in existing_dois]
+            num_after = len(articles)
 
-        if num_before != num_after:
-            num_removed = num_before - num_after
-            self._logger.warn(f"Excluding {num_removed} articles already present in collection")
+            if num_before != num_after:
+                num_removed = num_before - num_after
+                self._logger.warn(f"Excluding {num_removed} articles already present in collection")
+        else:
+            num_after = len(articles)
 
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
@@ -179,6 +267,9 @@ class LitTool:
                 self.add_article(cur, tuple(entry.values()))
             
             self._logger.info(f"Finished!")
+
+            #  self._sync_topics(articles)
+            self._sync_topics()
 
         cur.close()
 

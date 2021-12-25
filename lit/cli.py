@@ -23,12 +23,13 @@ class LitCLI:
         self._get_args()
 
     def _setup_logger(self):
-        """Sets up root logger to print messages to STDOUT"""
+        """Sets up logger to print messages to STDOUT"""
+        """Sets up logger to print messages to STDOUT"""
         logging.basicConfig(stream=sys.stdout, 
-                            format='[%(levelname)s] %(message)s',
-                            level=logging.DEBUG)
+                            format='[%(levelname)s] %(message)s')
 
         self._logger = logging.getLogger('lit')
+        self._logger.setLevel(logging.DEBUG)
 
     def _get_args(self):
         """
@@ -43,8 +44,8 @@ class LitCLI:
 List of supported commands:
    add      Adds a .bib BibTeX reference collection
    info     Display lit collection info
+   walk     Randomly suggests an article for review
    stats    [NOT IMPLEMENTED] Display user review stats
-   walk     [NOT IMPLEMENTED] Randomly suggests an article for review
 ''')
 
         parser.add_argument('command', help='Sub-command to run')
@@ -75,6 +76,14 @@ List of supported commands:
             help="Path to .bib file to be imported",
         )
 
+        parser.add_argument(
+            "-d",
+            "--debug",
+            help="If enabled, skips check for existing articles",
+            default=False,
+            type=bool
+        )
+
         # parse remaining parts of command args
         args = parser.parse_args(sys.argv[2:])
 
@@ -85,7 +94,7 @@ List of supported commands:
             raise Exception("Invalid input! Expecting a .bib file...")
 
         # import and add any new entries to db
-        self.lit.import_bibtex(args.bibtex)
+        self.lit.import_bibtex(args.bibtex, debug=args.debug)
 
     def walk(self):
         """
@@ -104,6 +113,24 @@ List of supported commands:
         # parse remaining parts of command args
         args = parser.parse_args(sys.argv[2:])
 
+        article = self.lit.walk()
+
+        self._print_header()
+        
+        year_str = f"[light_goldenrod3]{article['year']}[/light_goldenrod3]"
+        print(f"[sky_blue1]Article[/sky_blue1]: {article['title']} ({year_str})")
+
+        print(f"[sea_green1] - url[/sea_green1]: {article['url']}")
+        print(f"[sea_green1] - doi[/sea_green1]: {article['doi']}")
+
+    def _print_header(self):
+        """
+        prints lit-tool header
+        """
+        print("[cyan]========================================[/cyan]")
+        print(":books:", "[bold orchid]lit-tool[/bold orchid]")
+        print("[cyan]========================================[/cyan]")
+
     def info(self):
         """
         "info" command
@@ -115,9 +142,7 @@ List of supported commands:
 
         info = self.lit.info()
 
-        print("[cyan]========================================[/cyan]")
-        print(":books:", "[bold orchid]lit-tool[/bold orchid]")
-        print("[cyan]========================================[/cyan]")
+        self._print_header()
         print(f"[sky_blue1]# Articles[/sky_blue1]: {info['num_articles']}")
         print(f"[salmon1]Incomplete Metadata[/salmon1]:")
         print(f"[light_salmon1]- Missing \"DOI\":[/light_salmon1]: {info['missing']['doi']}")

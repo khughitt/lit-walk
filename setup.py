@@ -28,7 +28,8 @@ setup(
     description="science literature exploration tool",
     install_requires=[
         "bibtexparser",
-        "pyyaml"
+        "pyyaml",
+        "rich"
     ],
     long_description=readme,
     author="Keith Hughitt",
