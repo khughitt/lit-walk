@@ -18,7 +18,7 @@ class LitCLI:
         self._logger.info("Initializing lit...")
 
         # initialize lit
-        self.lit = LitWalk()
+        self.lit = LitWalk(cli_mode=True)
 
         self._get_args()
 

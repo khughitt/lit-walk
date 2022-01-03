@@ -14,6 +14,7 @@ import pandas as pd
 from lit.nlp import STOP_KEYWORDS
 from bibtexparser.bparser import BibTexParser
 from sklearn.decomposition import PCA
+from rich import print
 
 # set random seed
 random.seed(321)
@@ -25,10 +26,12 @@ KEYWORD_MIN_FREQ = 3
 MIN_KEYWORD_LEN = 3
 
 class LitWalk:
-    def __init__(self):
+    def __init__(self, cli_mode=False):
         """Initializes a new LitWalk instance."""
         # setting logging
         self._setup_logger()
+
+        self.cli_mode = cli_mode
 
         # config dir
         if os.getenv('XDG_CONFIG_HOME'):
@@ -318,27 +321,71 @@ class LitWalk:
 
         return article_dicts
 
-    def walk(self):
+    def walk(self, search):
         """Chooses an article at random"""
-        num_articles = self.num_articles()
 
-        ind = random.randint(1, num_articles)
+        # if no search constraints specified, choose from all articles
+        if search == "":
+            article = self.get_random()
+        else:
+            article = self.get_filtered(search)
 
+        # update stats; for now, assume article was read (later: prompt user..)
+        self.update_stats(article["doi"])
+
+        return article 
+
+    def get_filtered(self, search):
+        """
+        Gets a single random article, limited to those matching some specified search
+        phrase
+        """
+        articles = self.get_articles()
+
+        filtered = []
+
+        num_articles = len(articles)
+
+        for article in articles:
+            for field in ['abstract', 'author', 'keywords', 'title']:
+                if article[field] is None:
+                    continue
+
+                if search in article[field].lower():
+                    filtered.append(article)
+
+        num_filtered = len(filtered)
+
+        if self.cli_mode == True:
+            print(f"[sky_blue1]Including {num_filtered}/{num_articles} articles...[/sky_blue1]")
+
+        return random.sample(filtered, 1)[0]
+
+    def get_random(self):
+        """
+        Gets a single random article from among all articles
+        """
         cur = self.db.cursor()
+
+        num_articles = self.num_articles()
+        ind = random.randint(1, num_articles)
 
         res = cur.execute(f"SELECT * FROM articles WHERE id={ind};")
         article = cur.fetchall()[0]
         colnames = [x[0] for x in res.description]
         article = dict(zip(colnames, article))
-
-        # update stats; for now, assume article was read (later: prompt user..)
-        res = cur.execute("INSERT INTO stats(doi, date) VALUES (?, ?);",
-                          (article["doi"], datetime.datetime.now()))
-        self.db.commit()
-
         cur.close()
 
-        return article 
+        return article
+
+    def update_stats(self, doi):
+        """Add entry to stats table"""
+        cur = self.db.cursor()
+
+        res = cur.execute("INSERT INTO stats(doi, date) VALUES (?, ?);",
+                          (doi, datetime.datetime.now()))
+        self.db.commit()
+        cur.close()
 
     def import_bibtex(self, infile, debug=False):
         """
