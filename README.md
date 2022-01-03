@@ -1,4 +1,4 @@
-lit-tool
+lit-walk
 ========
 
 _Tools to help with understanding the scientific literature.._
@@ -9,7 +9,11 @@ _Tools to help with understanding the scientific literature.._
 2. to facilitate learning at one's edge
 3. to visualize the context surrounding an article or topic
 
-**How?**
+Usage
+-----
 
-...
-
+```
+lit-walk add path/to/refs.bib
+lit-walk info
+lit-walk walk
+```

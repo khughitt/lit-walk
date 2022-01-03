@@ -1,5 +1,5 @@
 """
-LitTool Class definition
+LitWalk Class definition
 """
 import re
 import random
@@ -10,11 +10,23 @@ import sqlite3
 import sys
 import datetime
 import bibtexparser
+import pandas as pd
+from lit.nlp import STOP_KEYWORDS
 from bibtexparser.bparser import BibTexParser
+from sklearn.decomposition import PCA
 
-class LitTool:
+# set random seed
+random.seed(321)
+
+# DEV: minimum number of occurrences of keyword, for it to be used?
+KEYWORD_MIN_FREQ = 3
+
+# exclude keywords with length <= N
+MIN_KEYWORD_LEN = 3
+
+class LitWalk:
     def __init__(self):
-        """Initializes a new LitTool instance."""
+        """Initializes a new LitWalk instance."""
         # setting logging
         self._setup_logger()
 
@@ -72,17 +84,18 @@ class LitTool:
 
         cursor.close()
 
-    #  def sync(self):
+    #  def detect_keywords(self, articles):
     #      """
-    #      Sync lit-tool db & update stats
+    #      Detects & quantifies potential keywords using article titles/abstracts
     #
-    #      1. add/extend keywords
+    #      Limitation: restricted to single word keywords?..
     #      """
     #      pass
 
-    def update_keywords(self):
+    def _update_keywords(self, articles):
         """
-        Updates and extends keywords associated with each article.
+        Updates and extends keywords associated with each article using _existing_
+        keywords as a guide..
 
         First, a list of all keywords associated with at least one article is
         inferred.
@@ -90,9 +103,57 @@ class LitTool:
         Next, the title/abstract of each article is scanned, and any detected keywords which are not already prese
 
         TODO:
-        - limit to keywords that appear at least N times?
-        - lemmatize keywords and check for keywords in lemmatized space?
+        - [ ] extend keywords for articles that already have some
+        - [ ] detect new keywords in titles/abstracts?
+        - [ ] stem/lemmatize prior to matching
+        - [ ] decide on appropriate way to choose keywords to check against..
         """
+        # get a list of keywords of interest
+        target_keywords = self._get_target_keywords(articles)
+
+        cur = self.db.cursor()
+
+        for article in articles:
+            if article['keywords'] is None:
+                new_keywords = []
+
+                for keyword in target_keywords:
+                    if (keyword in article['title'].lower() or
+                        (article['abstract'] is not None and keyword in
+                         article['abstract'].lower())):
+                        new_keywords.append(keyword)
+
+                if len(new_keywords) > 0:
+                    self._logger.info(f"Adding {len(new_keywords)} new keywords..")
+
+                    article
+                    # update db
+                    res = cur.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
+                                      ("; ".join(new_keywords), article["doi"]))
+
+        self.db.commit()
+
+    def _get_target_keywords(self, articles):
+        """
+        Returns a list of keywords of sufficient length and frequency
+        """
+        all_keywords = []
+
+        for article in articles:
+            if article['keywords'] is not None:
+                keywords = [x.strip().lower() for x in article['keywords'].split(";")]
+
+                all_keywords = all_keywords + keywords
+
+        # for articles with missing keywords, check for common keywords in the
+        # title/abstract
+        keyword_counts = pd.Series(all_keywords).value_counts()
+
+        # for now, exclude keywords which only appear a small number of times
+        keywords = keyword_counts[keyword_counts >= KEYWORD_MIN_FREQ].index
+        keywords = sorted([x for x in keywords if len(x) >= MIN_KEYWORD_LEN])
+
+        return keywords
 
     def _create_articles_table(self, cursor):
         """
@@ -169,14 +230,76 @@ class LitTool:
         except sqlite3.Error as e:
             print(e)
 
-    #  def _sync_topics(self, articles):
-    def _sync_topics(self):
+    def _sync(self):
         """
-        Scans article collection and updates topics table.
+        1. extends article keywords
+        2. creates <article x topic> mat?
         """
         articles = self.get_articles()
 
+        # updates keywords based on existing keywords..
+        self._update_keywords(articles)
+
+        # testing: perform pca projection on <article x keyword> matrix
+        df = self.get_keyword_df()
+
+        pca = PCA(n_components=2, whiten=False, random_state=1)
+        
+        pca = pca.fit(df.to_numpy())
+
+        # doesn't explain much variance!
+        # 1. try mca? (prince)
+        # 2. heavier filtering of low-freq terms?
+        # for now, save data so that it can be experimented with externally..
+        pca.explained_variance_ratio_
+
+        pca_df = pd.DataFrame(pca.transform(df.to_numpy()), index=df.index,
+                columns=['PC1', 'PC2'])
+
+        # TESTING..
+        df.to_csv("dat.csv")
+        pca_df.to_csv("dat_pca.csv")
+
         breakpoint()
+
+    def get_keyword_df(self):
+        """Returns an <article, keyword> dataframe"""
+        # get up-to-date article entries
+        cur = self.db.cursor()
+        res = cur.execute("SELECT doi, keywords FROM articles ORDER BY doi;")
+        articles = cur.fetchall()
+
+        # convert to list of dicts
+        article_dicts = []
+
+        for article in articles:
+            article_dicts.append({"doi": article[0], "keywords": article[1]})
+
+        target_keywords = pd.Series(self._get_target_keywords(article_dicts))
+
+        # use a list of rows to build matrix
+        rows = []
+        dois = []
+
+        # convert keywords to list, and get list of all keywords
+        for i, article in enumerate(article_dicts):
+            keywords = []
+
+            if article['keywords'] is not None:
+                keywords = [x.strip() for x in article['keywords'].split('; ')]
+
+            dois.append(article['doi'])
+            rows.append(target_keywords.isin(keywords))
+
+        # combine rows into dataframe
+        dat = pd.DataFrame.from_records(rows)
+        dat.columns = target_keywords
+        dat.index = dois
+
+        # convert to ndarray and return
+        dat.replace({False: 0, True: 1}, inplace=True)
+        
+        return dat
 
     def get_articles(self):
         """Retrieves articles table"""
@@ -237,12 +360,13 @@ class LitTool:
             num_missing = len(bd.entries) - len(articles)
             self._logger.warn(f"Excluding {num_missing} articles with no associated DOI")
 
+        cur = self.db.cursor()
+
         # exclude existing articles
         if not debug:
-            cur = self.db.cursor()
             cur.execute("SELECT doi FROM articles;")
             
-            existing_dois = cur.fetchall()
+            existing_dois = [x[0] for x in cur.fetchall()]
 
             num_before = len(articles)
             articles = [x for x in articles if x['doi'] not in existing_dois]
@@ -260,8 +384,8 @@ class LitTool:
             self._logger.info(f"Adding {num_after} new articles..")
 
             fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
-                    "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
-                    "volume", "number", "url", "year"]
+                      "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
+                      "volume", "number", "url", "year"]
 
             for article in articles:
                 entry = {k: None for k in fields}
@@ -269,12 +393,23 @@ class LitTool:
 
                 entry.update(captured_fields)
 
+                # strip newlines from title, abstract, keywords, etc.
+                for field in ['title', 'abstract', 'author', 'keywords']:
+                    if entry[field] is not None:
+                        entry[field] = entry[field].replace("\n", " ");
+
+                # remove stop words/phrases from keywords
+                if entry['keywords'] is not None:
+                    keywords = [x.strip() for x in entry['keywords'].split(";")]
+                    keywords = [x for x in keywords if x not in STOP_KEYWORDS]
+                    entry['keywords'] = "; ".join(keywords)
+
                 self.add_article(cur, tuple(entry.values()))
             
             self._logger.info(f"Finished!")
 
-            #  self._sync_topics(articles)
-            self._sync_topics()
+            #  self._sync_articles = self.topics(articles)
+            self._sync()
 
         cur.close()
 
@@ -284,6 +419,13 @@ class LitTool:
         cursor.execute(sql, article)
 
         self.db.commit()
+
+    def extend_keywords(self):
+        """
+        Attempts to add/extend keywords associated with each article, based on
+        keywords which appear along-side of other articles.
+        """
+        breakpoint()
 
     def info(self):
         """Returns basic information about lit setup"""

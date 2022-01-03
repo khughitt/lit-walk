@@ -1,12 +1,12 @@
 """
-lit-tool CLI
+lit-walk CLI
 """
 import os
 import sys
 import datetime
 import logging
 from argparse import ArgumentParser
-from lit.tool import LitTool
+from lit.walk import LitWalk
 from rich import print
 #from rich.markdown import Markdown
 
@@ -18,7 +18,7 @@ class LitCLI:
         self._logger.info("Initializing lit...")
 
         # initialize lit
-        self.lit = LitTool()
+        self.lit = LitWalk()
 
         self._get_args()
 
@@ -80,8 +80,7 @@ List of supported commands:
             "-d",
             "--debug",
             help="If enabled, skips check for existing articles",
-            default=False,
-            type=bool
+            action="store_true",
         )
 
         # parse remaining parts of command args
@@ -104,16 +103,17 @@ List of supported commands:
         parser = ArgumentParser(description='Randomly suggests an article for review')
 
         parser.add_argument(
-            "-t",
-            "--topics",
-            help="Specific topic(s) to choose from",
+            "-s",
+            "--search",
+            help="Limit search to articles containing the specified search phrase",
+            default="",
             type=str
         )
 
         # parse remaining parts of command args
         args = parser.parse_args(sys.argv[2:])
 
-        article = self.lit.walk()
+        article = self.lit.walk(args.search)
 
         self._print_header()
         
@@ -125,10 +125,10 @@ List of supported commands:
 
     def _print_header(self):
         """
-        prints lit-tool header
+        prints lit-walk header
         """
         print("[cyan]========================================[/cyan]")
-        print(":books:", "[bold orchid]lit-tool[/bold orchid]")
+        print(":books:", "[bold orchid]lit-walk[/bold orchid]")
         print("[cyan]========================================[/cyan]")
 
     def info(self):

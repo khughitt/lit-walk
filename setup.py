@@ -22,20 +22,24 @@ with open("LICENSE") as f:
     license = f.read()
 
 setup(
-    name="lit-tool",
+    name="lit-walk",
     version="0.1.0",
     classifiers=CLASSIFIERS,
     description="science literature exploration tool",
     install_requires=[
         "bibtexparser",
+        "matplotlib",
+        "pandas",
         "pyyaml",
-        "rich"
+        "rich",
+        "scikit-learn",
+        "stanza"
     ],
     long_description=readme,
     author="Keith Hughitt",
     author_email="keith.hughitt@nih.gov",
-    url="https://github.com/khughitt/lit-tool",
+    url="https://github.com/khughitt/lit-walk",
     license=license,
-    scripts=["bin/lit-tool"],
+    scripts=["bin/lit-walk"],
     packages=find_packages(exclude=("tests", "docs")),
 )
