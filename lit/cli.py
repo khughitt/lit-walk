@@ -8,7 +8,7 @@ import logging
 from argparse import ArgumentParser
 from lit.walk import LitWalk
 from rich import print
-#from rich.markdown import Markdown
+from rich.padding import Padding
 
 class LitCLI:
     def __init__(self):
@@ -118,7 +118,10 @@ List of supported commands:
         self._print_header()
         
         year_str = f"[light_goldenrod3]{article['year']}[/light_goldenrod3]"
-        print(f"[sky_blue1]Article[/sky_blue1]: {article['title']} ({year_str})")
+        print(f"[bold light_coral]{article['title']}[/bold light_coral] ({year_str})")
+
+        if article['abstract'] is not None:
+            print(Padding(article['abstract'], (1, 1), style='grey89'))
 
         print(f"[sea_green1] - url[/sea_green1]: {article['url']}")
         print(f"[sea_green1] - doi[/sea_green1]: {article['doi']}")

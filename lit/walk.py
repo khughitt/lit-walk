@@ -16,9 +16,6 @@ from bibtexparser.bparser import BibTexParser
 from sklearn.decomposition import PCA
 from rich import print
 
-# set random seed
-random.seed(321)
-
 # DEV: minimum number of occurrences of keyword, for it to be used?
 KEYWORD_MIN_FREQ = 3
 
