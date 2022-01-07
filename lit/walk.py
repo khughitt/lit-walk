@@ -310,15 +310,17 @@ class LitWalk:
         # all articles
         if n is None:
             if missing_abstracts:
-                res = cur.execute("SELECT * FROM articles WHERE abstract = '';")
+                sql = "SELECT * FROM articles WHERE abstract IS NULL;"
             else:
-                res = cur.execute("SELECT * FROM articles;")
+                sql = "SELECT * FROM articles;"
         else:
             # subset of articles
             if missing_abstracts:
-                res = cur.execute(f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles WHERE abstract = '' ORDER BY RANDOM() LIMIT {n})")
+                sql = f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles WHERE abstract IS NULL ORDER BY RANDOM() LIMIT {n})"
             else:
-                res = cur.execute(f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY RANDOM() LIMIT {n})")
+                sql = f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY RANDOM() LIMIT {n})"
+
+        res = cur.execute(sql)
 
         articles = cur.fetchall()
 

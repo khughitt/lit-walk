@@ -57,7 +57,9 @@ List of supported commands:
         )
         
         # parse and validate sub-command
-        args = parser.parse_args(sys.argv[1:])
+        #args = parser.parse_args(sys.argv[1:])
+
+        args, unknown = parser.parse_known_args()
 
         # set logging verbosity
         self.verbose = args.verbose
