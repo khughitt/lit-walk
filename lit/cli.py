@@ -9,6 +9,8 @@ from argparse import ArgumentParser
 from lit.walk import LitWalk
 from rich import print
 from rich.padding import Padding
+from rich.table import Table
+from rich.console import Console
 
 class LitCLI:
     def __init__(self):
@@ -16,6 +18,9 @@ class LitCLI:
         self._setup_logger()
 
         self._logger.info("Initializing lit...")
+
+        # rich console
+        self.console = Console()
 
         # initialize lit
         self.lit = LitWalk(cli_mode=True)
@@ -44,6 +49,7 @@ class LitCLI:
 List of supported commands:
    add      Adds a .bib BibTeX reference collection
    info     Display lit collection info
+   list     Lists articles in users collection
    walk     Randomly suggests an article for review
    stats    [NOT IMPLEMENTED] Display user review stats
 ''')
@@ -53,7 +59,7 @@ List of supported commands:
         # parse and validate sub-command
         args = parser.parse_args(sys.argv[1:2])
 
-        valid_cmds = ['walk', 'add', 'info', 'stats']
+        valid_cmds = ['add', 'info', 'list', 'stats', 'walk']
 
         if args.command not in valid_cmds:
             self._logger.error("Unrecognized command specified: {args.command}!")
@@ -77,8 +83,7 @@ List of supported commands:
         )
 
         parser.add_argument(
-            "-d",
-            "--debug",
+            "--skip-check",
             help="If enabled, skips check for existing articles",
             action="store_true",
         )
@@ -93,7 +98,54 @@ List of supported commands:
             raise Exception("Invalid input! Expecting a .bib file...")
 
         # import and add any new entries to db
-        self.lit.import_bibtex(args.bibtex, debug=args.debug)
+        self.lit.import_bibtex(args.bibtex, skip_check=args.skip_check)
+
+    def list(self):
+        """
+        "list" command
+        """
+        # parse "walk"-specific args
+        parser = ArgumentParser(description='Lists articles in users collection')
+
+        parser.add_argument(
+            "-n",
+            "--num-articles",
+            help="Maximum number of results to show",
+            default=5,
+            type=int
+        )
+
+        # - [ ] TODO
+        #  parser.add_argument(
+        #      "-d",
+        #      "--details",
+        #      help="If enabled, prints detailed views for each article",
+        #      action="store_true",
+        #  )
+
+        parser.add_argument(
+            "--missing-abstract",
+            help="Only short articles which are missing abstracts",
+            action="store_true"
+        )
+
+        # parse remaining parts of command args
+        args = parser.parse_args(sys.argv[2:])
+
+        articles = self.lit.get_articles(args.num_articles, args.missing_abstract)
+
+        self._print_header()
+        
+        table = Table(title=f"Articles (n={args.num_articles})")
+
+        table.add_column("DOI", justify="left", style="sea_green1", no_wrap=True)
+        table.add_column("Year", style="light_goldenrod3")
+        table.add_column("Title", style="bold light_coral")
+
+        for article in articles:
+            table.add_row(article['doi'], str(article['year']), article['title'])
+
+        self.console.print(table)
 
     def walk(self):
         """

@@ -301,11 +301,22 @@ class LitWalk:
         
         return dat
 
-    def get_articles(self):
+    def get_articles(self, n=None, missing_abstracts=False):
         """Retrieves articles table"""
         cur = self.db.cursor()
 
-        res = cur.execute("SELECT * FROM articles;")
+        # all articles
+        if n is None:
+            if missing_abstracts:
+                res = cur.execute("SELECT * FROM articles WHERE abstract = '';")
+            else:
+                res = cur.execute("SELECT * FROM articles;")
+        else:
+            # subset of articles
+            if missing_abstracts:
+                res = cur.execute(f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles WHERE abstract = '' ORDER BY RANDOM() LIMIT {n})")
+            else:
+                res = cur.execute(f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY RANDOM() LIMIT {n})")
 
         articles = cur.fetchall()
 
@@ -384,7 +395,7 @@ class LitWalk:
         self.db.commit()
         cur.close()
 
-    def import_bibtex(self, infile, debug=False):
+    def import_bibtex(self, infile, skip_check=False):
         """
         Imports and parses a bibtex reference file
         """
@@ -407,7 +418,7 @@ class LitWalk:
         cur = self.db.cursor()
 
         # exclude existing articles
-        if not debug:
+        if not skip_check:
             cur.execute("SELECT doi FROM articles;")
             
             existing_dois = [x[0] for x in cur.fetchall()]
