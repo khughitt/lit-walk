@@ -15,30 +15,24 @@ from rich.console import Console
 class LitCLI:
     def __init__(self):
         """Initializes a new LitCLI instance"""
-        self._setup_logger()
-
-        self._logger.info("Initializing lit...")
-
         # rich console
         self.console = Console()
 
+        cmd = self._get_cmd()
+
+        self._setup_logger()
+
         # initialize lit
-        self.lit = LitWalk(cli_mode=True)
+        self.lit = LitWalk(self.verbose)
 
-        self._get_args()
+        self._logger.info("Initializing lit-walk...")
 
-    def _setup_logger(self):
-        """Sets up logger to print messages to STDOUT"""
-        """Sets up logger to print messages to STDOUT"""
-        logging.basicConfig(stream=sys.stdout, 
-                            format='[%(levelname)s] %(message)s')
+        getattr(self, cmd)()
 
-        self._logger = logging.getLogger('lit')
-        self._logger.setLevel(logging.DEBUG)
-
-    def _get_args(self):
+    def _get_cmd(self):
         """
-        Parses input and returns arguments
+        Parses command line arguments and determine command to run + any global
+        arguments.
 
         Based on: https://chase-seibert.github.io/blog/2014/03/21/python-multilevel-argparse.html
         """
@@ -55,19 +49,41 @@ List of supported commands:
 ''')
 
         parser.add_argument('command', help='Sub-command to run')
+
+        parser.add_argument(
+            "--verbose",
+            help="If enabled, prints verbose output",
+            action="store_true",
+        )
         
         # parse and validate sub-command
-        args = parser.parse_args(sys.argv[1:2])
+        args = parser.parse_args(sys.argv[1:])
+
+        # set logging verbosity
+        self.verbose = args.verbose
 
         valid_cmds = ['add', 'info', 'list', 'stats', 'walk']
 
         if args.command not in valid_cmds:
-            self._logger.error("Unrecognized command specified: {args.command}!")
+            print(f"[ERROR] Unrecognized command specified: {args.command}!")
             parser.print_help()
             sys.exit()
 
         # execute method with same name as sub-command
-        getattr(self, args.command)()
+        return args.command
+
+    def _setup_logger(self):
+        """Sets up logger to print messages to STDOUT"""
+        logging.basicConfig(stream=sys.stdout, 
+                            format='[%(levelname)s] %(message)s')
+
+        self._logger = logging.getLogger('lit')
+
+        if self.verbose:
+            self._logger.setLevel(logging.DEBUG)
+        else:
+            self._logger.setLevel(logging.WARN)
+
 
     def add(self):
         """
@@ -134,6 +150,9 @@ List of supported commands:
 
         articles = self.lit.get_articles(args.num_articles, args.missing_abstract)
 
+        # order results by year
+        articles.sort(key=lambda x: x['year'], reverse=True)
+
         self._print_header()
         
         table = Table(title=f"Articles (n={args.num_articles})")
@@ -165,9 +184,14 @@ List of supported commands:
         # parse remaining parts of command args
         args = parser.parse_args(sys.argv[2:])
 
-        article = self.lit.walk(args.search)
+        res = self.lit.walk(args.search)
+
+        article = res['article']
 
         self._print_header()
+
+        if args.search != "":
+            print(f"[sky_blue1]Including {res['num_filtered']}/{res['num_articles']} articles...[/sky_blue1]")
         
         year_str = f"[light_goldenrod3]{article['year']}[/light_goldenrod3]"
         print(f"[bold light_coral]{article['title']}[/bold light_coral] ({year_str})")

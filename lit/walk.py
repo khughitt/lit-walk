@@ -23,12 +23,10 @@ KEYWORD_MIN_FREQ = 3
 MIN_KEYWORD_LEN = 3
 
 class LitWalk:
-    def __init__(self, cli_mode=False):
+    def __init__(self, verbose):
         """Initializes a new LitWalk instance."""
         # setting logging
-        self._setup_logger()
-
-        self.cli_mode = cli_mode
+        self._setup_logger(verbose)
 
         # config dir
         if os.getenv('XDG_CONFIG_HOME'):
@@ -45,13 +43,17 @@ class LitWalk:
         # load articles / stats databases
         self._init_db()
 
-    def _setup_logger(self):
+    def _setup_logger(self, verbose):
         """Sets up logger to print messages to STDOUT"""
         logging.basicConfig(stream=sys.stdout, 
                             format='[%(levelname)s] %(message)s')
 
         self._logger = logging.getLogger('lit')
-        self._logger.setLevel(logging.DEBUG)
+
+        if verbose:
+            self._logger.setLevel(logging.DEBUG)
+        else:
+            self._logger.setLevel(logging.WARN)
 
     def _init_db(self):
         """
@@ -334,14 +336,14 @@ class LitWalk:
 
         # if no search constraints specified, choose from all articles
         if search == "":
-            article = self.get_random()
+            res = self.get_random()
         else:
-            article = self.get_filtered(search)
+            res = self.get_filtered(search)
 
         # update stats; for now, assume article was read (later: prompt user..)
-        self.update_stats(article["doi"])
+        self.update_stats(res['article']["doi"])
 
-        return article 
+        return res 
 
     def get_filtered(self, search):
         """
@@ -364,10 +366,13 @@ class LitWalk:
 
         num_filtered = len(filtered)
 
-        if self.cli_mode == True:
-            print(f"[sky_blue1]Including {num_filtered}/{num_articles} articles...[/sky_blue1]")
+        res = {
+            "article": random.sample(filtered, 1)[0],
+            "num_included": num_filtered,
+            "num_total": num_articles
+        }
 
-        return random.sample(filtered, 1)[0]
+        return res
 
     def get_random(self):
         """
@@ -384,7 +389,13 @@ class LitWalk:
         article = dict(zip(colnames, article))
         cur.close()
 
-        return article
+        res = {
+            "article": article,
+            "num_included": num_articles,
+            "num_total": num_articles
+        }
+
+        return res
 
     def update_stats(self, doi):
         """Add entry to stats table"""
