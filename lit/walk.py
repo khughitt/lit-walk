@@ -83,6 +83,9 @@ class LitWalk:
 
         if "stats" not in tables:
             self._create_stats_table(cursor)
+            
+        if "articleTopics" not in tables:
+            self._create_article_topics_table(cursor)
 
         cursor.close()
 
@@ -212,25 +215,43 @@ class LitWalk:
         except sqlite3.Error as e:
             print(e)
 
-    def _create_topics_table(self, cursor):
+    def _create_article_topics_table(self, cursor):
         """
-        Create and <article x topic> matrix?
-            - since topics will change across time, perhaps store in "long" form in sql?
+        Creates a table mapping from article to topics
         """
         sql = """
-        CREATE TABLE IF NOT EXISTS topics (
+        CREATE TABLE IF NOT EXISTS articleTopics (
             id integer PRIMARY KEY,
-            topic text,
-            num_articles integer,
-            times_reviewed integer
+            doi text,
+            topic text
         );
         """
-        self._logger.info("Creating topics table...")
+        self._logger.info("Creating article-topics table...")
 
         try:
             cursor.execute(sql)
         except sqlite3.Error as e:
             print(e)
+
+
+    #  def _create_topics_table(self, cursor):
+    #      """
+    #      Table mapping from specific topics to their place in a topic embedding matrix;
+    #      each entry effectively represents a row in the embedding matrix.
+    #      """
+    #      sql = """
+    #      CREATE TABLE IF NOT EXISTS topics (
+    #          topic text,
+    #          num_articles integer,
+    #          times_reviewed integer
+    #      );
+    #      """
+    #      self._logger.info("Creating topics table...")
+    #
+    #      try:
+    #          cursor.execute(sql)
+    #      except sqlite3.Error as e:
+    #          print(e)
 
     def _sync(self):
         """
