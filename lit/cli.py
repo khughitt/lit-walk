@@ -18,6 +18,8 @@ class LitCLI:
         # rich console
         self.console = Console()
 
+        self._print_header()
+
         cmd = self._get_cmd()
 
         self._setup_logger()
@@ -154,9 +156,7 @@ List of supported commands:
 
         # order results by year
         articles.sort(key=lambda x: x['year'], reverse=True)
-
-        self._print_header()
-        
+ 
         table = Table(title=f"Articles (n={args.num_articles})")
 
         table.add_column("DOI", justify="left", style="sea_green1", no_wrap=True)
@@ -190,8 +190,6 @@ List of supported commands:
 
         article = res['article']
 
-        self._print_header()
-
         if args.search != "":
             print(f"[sky_blue1]Including {res['num_filtered']}/{res['num_articles']} articles...[/sky_blue1]")
         
@@ -223,7 +221,6 @@ List of supported commands:
 
         info = self.lit.info()
 
-        self._print_header()
         print(f"[sky_blue1]# Articles[/sky_blue1]: {info['num_articles']}")
         print(f"[salmon1]Incomplete Metadata[/salmon1]:")
         print(f"[light_salmon1]- Missing \"DOI\":[/light_salmon1]: {info['missing']['doi']}")
