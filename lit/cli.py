@@ -118,6 +118,8 @@ List of supported commands:
             raise Exception("Invalid input! Expecting a .bib file...")
 
         # import and add any new entries to db
+        print(f"Scanning {args.bibtex} for new entries...")
+
         self.lit.import_bibtex(args.bibtex, skip_check=args.skip_check)
 
     def list(self):

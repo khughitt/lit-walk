@@ -16,12 +16,6 @@ from bibtexparser.bparser import BibTexParser
 from sklearn.decomposition import PCA
 from rich import print
 
-# DEV: minimum number of occurrences of keyword, for it to be used?
-KEYWORD_MIN_FREQ = 3
-
-# exclude keywords with length <= N
-MIN_KEYWORD_LEN = 3
-
 class LitWalk:
     def __init__(self, verbose):
         """Initializes a new LitWalk instance."""
@@ -131,7 +125,6 @@ class LitWalk:
                 if len(new_keywords) > 0:
                     self._logger.info(f"Adding {len(new_keywords)} new keywords..")
 
-                    article
                     # update db
                     res = cur.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
                                       ("; ".join(new_keywords), article["doi"]))
@@ -146,7 +139,7 @@ class LitWalk:
 
         for article in articles:
             if article['keywords'] is not None:
-                keywords = [x.strip().lower() for x in article['keywords'].split(";")]
+                keywords = [x.strip() for x in article['keywords'].split(";")]
 
                 all_keywords = all_keywords + keywords
 
@@ -155,8 +148,11 @@ class LitWalk:
         keyword_counts = pd.Series(all_keywords).value_counts()
 
         # for now, exclude keywords which only appear a small number of times
-        keywords = keyword_counts[keyword_counts >= KEYWORD_MIN_FREQ].index
-        keywords = sorted([x for x in keywords if len(x) >= MIN_KEYWORD_LEN])
+        min_freq = self._config['keywords']['min_freq']
+        min_size = self._config['keywords']['min_size']
+
+        keywords = keyword_counts[keyword_counts >= min_freq].index
+        keywords = sorted([x for x in keywords if len(x) >= min_size])
 
         return keywords
 
@@ -264,26 +260,28 @@ class LitWalk:
         self._update_keywords(articles)
 
         # testing: perform pca projection on <article x keyword> matrix
-        df = self.get_keyword_df()
+        #  df = self.get_keyword_df()
 
-        pca = PCA(n_components=2, whiten=False, random_state=1)
-        
-        pca = pca.fit(df.to_numpy())
+        # exclude articles with no associated keywords..
+        #  df = df[df.sum(axis=1) > 0]
+        #
+        #  pca = PCA(n_components=2, whiten=False, random_state=1)
+        #
+        #  pca = pca.fit(df.to_numpy())
 
-        # doesn't explain much variance!
+        # doesn't explain much variance! (~11% / 3%, in testing..)
         # 1. try mca? (prince)
         # 2. heavier filtering of low-freq terms?
         # for now, save data so that it can be experimented with externally..
-        pca.explained_variance_ratio_
+        #pca.explained_variance_ratio_
 
-        pca_df = pd.DataFrame(pca.transform(df.to_numpy()), index=df.index,
-                columns=['PC1', 'PC2'])
+        #  pca_df = pd.DataFrame(pca.transform(df.to_numpy()), index=df.index,
+        #          columns=['PC1', 'PC2'])
 
-        # TESTING..
-        df.to_csv("dat.csv")
-        pca_df.to_csv("dat_pca.csv")
-
-        breakpoint()
+        #  df.to_csv("dat.csv")
+        #  pca_df.to_csv("dat_pca.csv")
+        #
+        #  breakpoint()
 
     def get_keyword_df(self):
         """Returns an <article, keyword> dataframe"""
@@ -379,6 +377,9 @@ class LitWalk:
 
         num_articles = len(articles)
 
+        # force case-insensitive comparison, for now.
+        search = search.lower()
+
         for article in articles:
             for field in ['abstract', 'author', 'keywords', 'title']:
                 if article[field] is None:
@@ -429,6 +430,13 @@ class LitWalk:
         self.db.commit()
         cur.close()
 
+    def get_excluded_keywords(self):
+        """Returns a list of phrases to ignore when parsing/inferring keywords"""
+        stopwords = self._config['keywords']['exclude'] + STOP_KEYWORDS
+        stopwords = [x.lower() for x in stopwords]
+
+        return stopwords
+
     def import_bibtex(self, infile, skip_check=False):
         """
         Imports and parses a bibtex reference file
@@ -470,6 +478,8 @@ class LitWalk:
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
         if num_after > 0:
+            stopwords = self.get_excluded_keywords()
+
             self._logger.info(f"Adding {num_after} new articles..")
 
             fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
@@ -487,10 +497,22 @@ class LitWalk:
                     if entry[field] is not None:
                         entry[field] = entry[field].replace("\n", " ");
 
-                # remove stop words/phrases from keywords
+                # extract keywords;
                 if entry['keywords'] is not None:
-                    keywords = [x.strip() for x in entry['keywords'].split(";")]
-                    keywords = [x for x in keywords if x not in STOP_KEYWORDS]
+                    keywords = []
+
+                    for keyword in entry['keywords'].split(";"):
+                        # for now, store all keywords as lowercase (better for matching
+                        # in article abstracts, etc.)
+                        keyword = keyword.strip().lower()
+
+                        # exclude keywords that either:
+                        # 1. match phrases in stop words list, or,
+                        # 2. contain a "/", possibly corresponding to a path in
+                        #    paperpile (this can be made optional, in the future..)
+                        if keyword not in stopwords and not "/" in keyword:
+                            keywords.append(keyword)
+
                     entry['keywords'] = "; ".join(keywords)
 
                 self.add_article(cur, tuple(entry.values()))
@@ -508,13 +530,6 @@ class LitWalk:
         cursor.execute(sql, article)
 
         self.db.commit()
-
-    def extend_keywords(self):
-        """
-        Attempts to add/extend keywords associated with each article, based on
-        keywords which appear along-side of other articles.
-        """
-        breakpoint()
 
     def info(self):
         """Returns basic information about lit setup"""
@@ -578,6 +593,13 @@ class LitWalk:
         Returns default configuration as a dict
         """
         return {
-            "data_dir": os.path.join(str(os.getenv("HOME")), ".lit")
+            "data_dir": os.path.join(str(os.getenv("HOME")), ".lit"),
+            "keywords": {
+                # exclude keywords with fewer than N characters
+                "min_size": 3,
+                # minimum number of occurrences of keyword, for it to be used?
+                "min_freq": 3,
+                # phrases to exclude when parsing/inferring keywords?
+                "exclude": []
+            }
         }
-
