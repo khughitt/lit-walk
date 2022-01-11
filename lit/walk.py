@@ -11,7 +11,7 @@ import sys
 import datetime
 import bibtexparser
 import pandas as pd
-from lit.nlp import STOP_KEYWORDS
+from lit.nlp import STOP_WORDS
 from bibtexparser.bparser import BibTexParser
 from sklearn.decomposition import PCA
 from rich import print
@@ -432,7 +432,7 @@ class LitWalk:
 
     def get_excluded_keywords(self):
         """Returns a list of phrases to ignore when parsing/inferring keywords"""
-        stopwords = self._config['keywords']['exclude'] + STOP_KEYWORDS
+        stopwords = self._config['keywords']['exclude'] + STOP_WORDS
         stopwords = [x.lower() for x in stopwords]
 
         return stopwords

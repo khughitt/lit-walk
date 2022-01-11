@@ -126,7 +126,7 @@ List of supported commands:
         """
         "list" command
         """
-        # parse "walk"-specific args
+        # parse "list"-specific args
         parser = ArgumentParser(description='Lists articles in users collection')
 
         parser.add_argument(
