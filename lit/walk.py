@@ -259,15 +259,15 @@ class LitWalk:
         # updates keywords based on existing keywords..
         self._update_keywords(articles)
 
+    def pca(self):
         # testing: perform pca projection on <article x keyword> matrix
-        #  df = self.get_keyword_df()
+        df = self.get_keyword_df()
 
         # exclude articles with no associated keywords..
-        #  df = df[df.sum(axis=1) > 0]
+        df = df[df.sum(axis=1) > 0]
         #
-        #  pca = PCA(n_components=2, whiten=False, random_state=1)
-        #
-        #  pca = pca.fit(df.to_numpy())
+        pca = PCA(n_components=2, whiten=False, random_state=1)
+        pca = pca.fit(df.to_numpy())
 
         # doesn't explain much variance! (~11% / 3%, in testing..)
         # 1. try mca? (prince)
@@ -275,13 +275,9 @@ class LitWalk:
         # for now, save data so that it can be experimented with externally..
         #pca.explained_variance_ratio_
 
-        #  pca_df = pd.DataFrame(pca.transform(df.to_numpy()), index=df.index,
-        #          columns=['PC1', 'PC2'])
-
-        #  df.to_csv("dat.csv")
-        #  pca_df.to_csv("dat_pca.csv")
-        #
-        #  breakpoint()
+        pca_df = pd.DataFrame(pca.transform(df.to_numpy()), index=df.index,
+                              columns=['PC1', 'PC2'])
+        return pca_df
 
     def get_keyword_df(self):
         """Returns an <article, keyword> dataframe"""

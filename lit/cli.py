@@ -44,6 +44,7 @@ class LitCLI:
 
 List of supported commands:
    add      Adds a .bib BibTeX reference collection
+   data     Returns data of various types
    info     Display lit collection info
    list     Lists articles in users collection
    walk     Randomly suggests an article for review
@@ -66,7 +67,7 @@ List of supported commands:
         # set logging verbosity
         self.verbose = args.verbose
 
-        valid_cmds = ['add', 'info', 'list', 'stats', 'walk']
+        valid_cmds = ['add', 'data', 'info', 'list', 'stats', 'walk']
 
         if args.command not in valid_cmds:
             print(f"[ERROR] Unrecognized command specified: {args.command}!")
@@ -121,6 +122,37 @@ List of supported commands:
         print(f"Scanning {args.bibtex} for new entries...")
 
         self.lit.import_bibtex(args.bibtex, skip_check=args.skip_check)
+
+    def data(self):
+        """
+        "data" command
+        """
+        # parse "data"-specific args
+        parser = ArgumentParser(description='Returns data of various types.')
+
+        parser.add_argument(
+            "-t",
+            "--type",
+            help="Type of dataset to return (df|pca|tsne)",
+            default="df",
+            type=str
+        )
+
+        parser.add_argument(
+            "file",
+            nargs="?",
+            type=str,
+            default="out.csv",
+            help="Location to write dataset",
+        )
+
+        # parse remaining parts of command args
+        args = parser.parse_args(sys.argv[2:])
+
+        if args.type == 'df':
+            self.lit.get_keyword_df().to_csv(args.file)
+        elif args.type == 'pca':
+            self.lit.pca().to_csv(args.file)
 
     def list(self):
         """
