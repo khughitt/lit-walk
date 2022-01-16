@@ -160,11 +160,11 @@ List of supported datatypes:
             parser.print_help()
             sys.exit()
         elif args.type == 'tfidf':
-            self.lit.tfidf().reset_index().to_feather(args.file)
+            self.lit.tfidf().reset_index().to_feather(args.output_file)
         elif args.type == 'pca':
-            self.lit.pca().reset_index().to_feather(args.file)
+            self.lit.pca().reset_index().to_feather(args.output_file)
         elif args.type == 'cosine':
-            self.lit.similarity().reset_index().to_feather(args.file)
+            self.lit.similarity().reset_index().to_feather(args.output_file)
         else:
             raise Exception(f"Unrecognized data type specified: {args.type}")
 
