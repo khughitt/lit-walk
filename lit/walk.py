@@ -294,6 +294,9 @@ class LitWalk:
                           columns=tfidf_vectorizer.get_feature_names_out(),
                           index=texts.keys())
 
+        # fix stanza's handling of "bayesian", if present.. (jan 2022)
+        df = df.rename({'Jayesian': 'bayesian'}, axis=1)
+
         return df
 
     def similarity(self):
