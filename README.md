@@ -9,6 +9,21 @@ _Tools to help with understanding the scientific literature.._
 2. to facilitate learning at one's edge
 3. to visualize the context surrounding an article or topic
 
+Installation
+------------
+
+Install lit-walk and dependencies:
+
+```
+pip install -e .
+```
+
+Download [Stanza English language model](https://stanfordnlp.github.io/stanza/download_models.html):
+
+```
+python -c "import stanza; stanza.download('en')"
+```
+
 Usage
 -----
 

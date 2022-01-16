@@ -128,31 +128,45 @@ List of supported commands:
         "data" command
         """
         # parse "data"-specific args
-        parser = ArgumentParser(description='Returns data of various types.')
+        parser = ArgumentParser(description='Returns data of various types.',
+            usage='''lit data <type> [<args>]
+
+List of supported datatypes:
+   tfidf   Article TF-IDF matrix
+   cosine  Article Cosine similarity matrix
+   pca     Article PCA projection
+''')
 
         parser.add_argument(
-            "-t",
-            "--type",
-            help="Type of dataset to return (df|pca|tsne)",
-            default="df",
+            "type",
+            nargs="?",
+            help="Type of dataset to return (tfidf|pca|sim|tsne)",
             type=str
         )
 
         parser.add_argument(
-            "file",
-            nargs="?",
-            type=str,
-            default="out.csv",
+            "-o",
+            "--output-file",
             help="Location to write dataset",
+            default="out.feather",
+            type=str,
         )
 
         # parse remaining parts of command args
         args = parser.parse_args(sys.argv[2:])
 
-        if args.type == 'df':
-            self.lit.get_keyword_df().to_csv(args.file)
+        if args.type is None:
+            print("[ERROR] Data type to generate must be specified")
+            parser.print_help()
+            sys.exit()
+        elif args.type == 'tfidf':
+            self.lit.tfidf().reset_index().to_feather(args.file)
         elif args.type == 'pca':
-            self.lit.pca().to_csv(args.file)
+            self.lit.pca().reset_index().to_feather(args.file)
+        elif args.type == 'cosine':
+            self.lit.similarity().reset_index().to_feather(args.file)
+        else:
+            raise Exception(f"Unrecognized data type specified: {args.type}")
 
     def list(self):
         """

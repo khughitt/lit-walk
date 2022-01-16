@@ -11,9 +11,11 @@ import sys
 import datetime
 import bibtexparser
 import pandas as pd
-from lit.nlp import STOP_WORDS
+from lit.nlp import STOP_WORDS, LemmaTokenizer
 from bibtexparser.bparser import BibTexParser
 from sklearn.decomposition import PCA
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from rich import print
 
 class LitWalk:
@@ -39,7 +41,7 @@ class LitWalk:
 
     def _setup_logger(self, verbose):
         """Sets up logger to print messages to STDOUT"""
-        logging.basicConfig(stream=sys.stdout, 
+        logging.basicConfig(stream=sys.stdout,
                             format='[%(levelname)s] %(message)s')
 
         self._logger = logging.getLogger('lit')
@@ -77,7 +79,7 @@ class LitWalk:
 
         if "stats" not in tables:
             self._create_stats_table(cursor)
-            
+
         if "articleTopics" not in tables:
             self._create_article_topics_table(cursor)
 
@@ -259,24 +261,76 @@ class LitWalk:
         # updates keywords based on existing keywords..
         self._update_keywords(articles)
 
+    def tfidf(self):
+        """
+        Generates article TF-IDF matrix using titles + abstracts
+
+        At present, articles with missing abstracts are excluded from the analysis.
+        """
+        texts = self.get_article_texts(exclude_missing=True)
+
+        # list of stopwords to exclude
+        stopwords = self.get_stopwords()
+
+        # determine tokenizer to use
+        tokenizer = None
+
+        # get lemmatization tokenizer, if enabled
+        if self._config['tokenization']['lemmatize']:
+            tokenizer = LemmaTokenizer(stopwords,
+                                       self._config['tokenization']['min_length'])
+
+        # generate TF-IDF matrix
+        tfidf_vectorizer = TfidfVectorizer(max_df=self._config['tfidf']['max_df'],
+                                           min_df=self._config['tfidf']['min_df'],
+                                           max_features=self._config['tfidf']['max_features'],
+                                           stop_words=stopwords,
+                                           tokenizer=tokenizer)
+
+        tfidf = tfidf_vectorizer.fit_transform(texts.values())
+
+        # convert sparse mat to dataframe
+        df = pd.DataFrame(tfidf.todense(),
+                          columns=tfidf_vectorizer.get_feature_names_out(),
+                          index=texts.keys())
+
+        return df
+
+    def similarity(self):
+        """
+        Computes an article similarity matrix
+
+        At present, uses cosine similarity of a TF-IDF transformed <article x word> matrix
+        """
+        tfidf = self.tfidf()
+
+        sim_mat = pd.DataFrame(cosine_similarity(tfidf), 
+                               index=tfidf.index, columns=tfidf.index)
+
+        return sim_mat
+
     def pca(self):
         # testing: perform pca projection on <article x keyword> matrix
-        df = self.get_keyword_df()
-
+        # df = self.get_keyword_df()
         # exclude articles with no associated keywords..
-        df = df[df.sum(axis=1) > 0]
-        #
+        #df = df[df.sum(axis=1) > 0]
+
+        # generate article similarity matrix (TF-IDF -> cosine similarity)
+        sim_mat = self.similarity()
+
         pca = PCA(n_components=2, whiten=False, random_state=1)
-        pca = pca.fit(df.to_numpy())
+        pca = pca.fit(sim_mat.to_numpy())
 
-        # doesn't explain much variance! (~11% / 3%, in testing..)
-        # 1. try mca? (prince)
-        # 2. heavier filtering of low-freq terms?
-        # for now, save data so that it can be experimented with externally..
-        #pca.explained_variance_ratio_
+        # % variance explained
+        pc_vars = pca.explained_variance_ratio_
 
-        pca_df = pd.DataFrame(pca.transform(df.to_numpy()), index=df.index,
+        self._logger.info(f"PCA Variance explained:")
+        self._logger.info(f" PC1 {pc_vars[0]:.3f}")
+        self._logger.info(f" PC2 {pc_vars[1]:.3f}")
+
+        pca_df = pd.DataFrame(pca.transform(sim_mat.to_numpy()), index=sim_mat.index,
                               columns=['PC1', 'PC2'])
+
         return pca_df
 
     def get_keyword_df(self):
@@ -315,8 +369,36 @@ class LitWalk:
 
         # convert to ndarray and return
         dat.replace({False: 0, True: 1}, inplace=True)
-        
+
         return dat
+
+    def get_article_texts(self, exclude_missing=True):
+        """
+        Returns a dict mapping from article DOIs to concatenated titles + abstracts.
+        """
+        # get article titles + abstracts
+        cur = self.db.cursor()
+        res = cur.execute("SELECT doi, title, abstract FROM articles ORDER BY doi;")
+        articles = cur.fetchall()
+
+        article_texts = {}
+
+        for article in articles:
+            # if enabled, skip articles with missing abstracts
+            if exclude_missing and article[2] is None:
+                continue
+
+            article_texts[article[0]] = article[1] + article[2]
+
+        return article_texts
+
+    def get_doi(self, cur):
+        """
+        Returns a list of existing DOIs in the database
+        """
+        cur.execute("SELECT doi FROM articles;")
+
+        return [x[0] for x in cur.fetchall()]
 
     def get_articles(self, n=None, missing_abstracts=False):
         """Retrieves articles table"""
@@ -360,7 +442,7 @@ class LitWalk:
         # update stats; for now, assume article was read (later: prompt user..)
         self.update_stats(res['article']["doi"])
 
-        return res 
+        return res
 
     def get_filtered(self, search):
         """
@@ -428,10 +510,19 @@ class LitWalk:
 
     def get_excluded_keywords(self):
         """Returns a list of phrases to ignore when parsing/inferring keywords"""
-        stopwords = self._config['keywords']['exclude'] + STOP_WORDS
-        stopwords = [x.lower() for x in stopwords]
+        exclude = (self._config['keywords']['exclude'] +
+                   self._config['stopwords'] +
+                   STOP_WORDS)
 
-        return stopwords
+        exclude = [x.lower() for x in exclude]
+
+        return exclude
+
+    def get_stopwords(self):
+        """Returns a list of stopwords to exclude from analysis"""
+        stopwords = self._config['stopwords'] + STOP_WORDS
+
+        return [x.lower() for x in stopwords]
 
     def import_bibtex(self, infile, skip_check=False):
         """
@@ -457,9 +548,7 @@ class LitWalk:
 
         # exclude existing articles
         if not skip_check:
-            cur.execute("SELECT doi FROM articles;")
-            
-            existing_dois = [x[0] for x in cur.fetchall()]
+            existing_dois = self.get_doi(cur)
 
             num_before = len(articles)
             articles = [x for x in articles if x['doi'] not in existing_dois]
@@ -474,51 +563,56 @@ class LitWalk:
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
         if num_after > 0:
-            stopwords = self.get_excluded_keywords()
-
             self._logger.info(f"Adding {num_after} new articles..")
 
-            fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
-                      "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
-                      "volume", "number", "url", "year"]
-
-            for article in articles:
-                entry = {k: None for k in fields}
-                captured_fields = {k: article[k] for k in fields if k in article}
-
-                entry.update(captured_fields)
-
-                # strip newlines from title, abstract, keywords, etc.
-                for field in ['title', 'abstract', 'author', 'keywords']:
-                    if entry[field] is not None:
-                        entry[field] = entry[field].replace("\n", " ");
-
-                # extract keywords;
-                if entry['keywords'] is not None:
-                    keywords = []
-
-                    for keyword in entry['keywords'].split(";"):
-                        # for now, store all keywords as lowercase (better for matching
-                        # in article abstracts, etc.)
-                        keyword = keyword.strip().lower()
-
-                        # exclude keywords that either:
-                        # 1. match phrases in stop words list, or,
-                        # 2. contain a "/", possibly corresponding to a path in
-                        #    paperpile (this can be made optional, in the future..)
-                        if keyword not in stopwords and not "/" in keyword:
-                            keywords.append(keyword)
-
-                    entry['keywords'] = "; ".join(keywords)
-
-                self.add_article(cur, tuple(entry.values()))
-            
-            self._logger.info(f"Finished!")
-
-            #  self._sync_articles = self.topics(articles)
-            self._sync()
+            self.add_articles(articles, cur)
 
         cur.close()
+
+    def add_articles(self, articles, cur):
+        """Adds one or more articles to the users collection"""
+        excluded_keywords = self.get_excluded_keywords()
+
+
+        fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
+                  "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
+                  "volume", "number", "url", "year"]
+
+        for article in articles:
+            entry = {k: None for k in fields}
+            captured_fields = {k: article[k] for k in fields if k in article}
+
+            entry.update(captured_fields)
+
+            # strip newlines from title, abstract, keywords, etc.
+            for field in ['title', 'abstract', 'author', 'keywords']:
+                if entry[field] is not None:
+                    entry[field] = entry[field].replace("\n", " ");
+
+            # extract keywords;
+            if entry['keywords'] is not None:
+                keywords = []
+
+                for keyword in entry['keywords'].split(";"):
+                    # for now, store all keywords as lowercase (better for matching
+                    # in article abstracts, etc.)
+                    keyword = keyword.strip().lower()
+
+                    # exclude keywords that either:
+                    # 1. match phrases in stop words list, or,
+                    # 2. contain a "/", possibly corresponding to a path in
+                    #    paperpile (this can be made optional, in the future..)
+                    if keyword not in excluded_keywords and not "/" in keyword:
+                        keywords.append(keyword)
+
+                entry['keywords'] = "; ".join(keywords)
+
+            self.add_article(cur, tuple(entry.values()))
+
+        self._logger.info(f"Finished!")
+
+        #  self._sync_articles = self.topics(articles)
+        self._sync()
 
     def add_article(self, cursor, article):
         sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal, keywords, pmc, pmid, title, abstract, author, file, volume, number, url, year)
@@ -597,5 +691,23 @@ class LitWalk:
                 "min_freq": 3,
                 # phrases to exclude when parsing/inferring keywords?
                 "exclude": []
+            },
+            # additional stopwords to include
+            "stopwords": [],
+            # TF-IDF parameters
+            # See: https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html
+            "tfidf": {
+                # minimum occurrences of token across all articles
+                "min_df": 3,
+                # maximum ratio of token across all articles
+                "max_df": 0.75,
+                # maximum number of features to keep in tf-idf matrix
+                "max_features": 500,
+            },
+            "tokenization": {
+                # include lemmatization step?
+                "lemmatize": True,
+                # minimum token length to include
+                "min_length": 2
             }
         }
