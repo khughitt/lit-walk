@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import random
 import re
+import shutil
 import sqlite3
 import sys
 import uuid
@@ -16,6 +17,7 @@ import yaml
 from bibtexparser.bparser import BibTexParser
 from frictionless import Package, Resource
 from lit.nlp import STOP_WORDS, LemmaTokenizer
+from pkg_resources import resource_filename
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -749,39 +751,10 @@ class LitWalk:
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir, mode=0o755)
 
-        with open(config_file, 'w') as fp:
-            yaml.dump(self._default_config(), fp)
+        outfile = os.path.join(conf_dir, "config.yml")
 
-    def _default_config(self):
-        """
-        Returns default configuration as a dict
-        """
-        return {
-            "data_dir": os.path.join(str(os.getenv("HOME")), ".lit"),
-            "keywords": {
-                # exclude keywords with fewer than N characters
-                "min_size": 3,
-                # minimum number of occurrences of keyword, for it to be used?
-                "min_freq": 3,
-                # phrases to exclude when parsing/inferring keywords?
-                "exclude": []
-            },
-            # additional stopwords to include
-            "stopwords": [],
-            # TF-IDF parameters
-            # See: https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html
-            "tfidf": {
-                # minimum occurrences of token across all articles
-                "min_df": 3,
-                # maximum ratio of token across all articles
-                "max_df": 0.75,
-                # maximum number of features to keep in tf-idf matrix
-                "max_features": 500,
-            },
-            "tokenization": {
-                # include lemmatization step?
-                "lemmatize": True,
-                # minimum token length to include
-                "min_length": 2
-            }
-        }
+        default_conf = os.path.join(os.path.abspath(resource_filename(__name__, "conf")), "default.yml")
+
+        shutil.copy(default_conf, outfile)
+
+        self._logger.info(f"Default config file generated at {outfile}")
