@@ -23,11 +23,12 @@ with open("LICENSE") as f:
 
 setup(
     name="lit-walk",
-    version="0.1.0",
+    version="0.2.0",
     classifiers=CLASSIFIERS,
     description="science literature exploration tool",
     install_requires=[
         "bibtexparser",
+        "frictionless",
         "matplotlib",
         "pandas",
         "pyyaml",

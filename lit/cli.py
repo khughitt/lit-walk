@@ -89,7 +89,6 @@ List of supported commands:
         else:
             self._logger.setLevel(logging.WARN)
 
-
     def add(self):
         """
         "add" command
@@ -146,25 +145,25 @@ List of supported datatypes:
 
         parser.add_argument(
             "-o",
-            "--output-file",
+            "--output-dir",
             help="Location to write dataset",
-            default="out.feather",
+            default=".",
             type=str,
         )
 
         # parse remaining parts of command args
         args = parser.parse_args(sys.argv[2:])
+        now = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+
+        out_dir = os.path.join(args.output_dir, f"{now}_{args.type}")
+        out_dir = os.path.realpath(os.path.expanduser(os.path.expandvars(out_dir)))
 
         if args.type is None:
             print("[ERROR] Data type to generate must be specified")
             parser.print_help()
             sys.exit()
-        elif args.type == 'tfidf':
-            self.lit.tfidf().reset_index().to_feather(args.output_file)
-        elif args.type == 'pca':
-            self.lit.pca().reset_index().to_feather(args.output_file)
-        elif args.type == 'cosine':
-            self.lit.similarity().reset_index().to_feather(args.output_file)
+        elif args.type in ['tfidf', 'pca', 'cosine']:
+            self.lit.create_pkg(args.type, out_dir)
         else:
             raise Exception(f"Unrecognized data type specified: {args.type}")
 

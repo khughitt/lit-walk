@@ -1,26 +1,38 @@
 """
 LitWalk Class definition
 """
-import re
-import random
-import os
-import yaml
+import bibtexparser
+import datetime
+import frictionless
 import logging
+import os
+import pandas as pd
+import random
+import re
 import sqlite3
 import sys
-import datetime
-import bibtexparser
-import pandas as pd
-from lit.nlp import STOP_WORDS, LemmaTokenizer
+import uuid
+import yaml
 from bibtexparser.bparser import BibTexParser
+from frictionless import Package, Resource
+from lit.nlp import STOP_WORDS, LemmaTokenizer
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from rich import print
 
+__version__ = "0.2.0"
+
 class LitWalk:
     def __init__(self, verbose):
-        """Initializes a new LitWalk instance."""
+        """
+        Initializes a new LitWalk instance.
+
+        Parameters
+        ----------
+        verbose: bool
+            If True, verbose logging is enabled
+        """
         # setting logging
         self._setup_logger(verbose)
 
@@ -654,6 +666,65 @@ class LitWalk:
         cur.close()
 
         return num_articles
+
+    def create_pkg(self, data_type, output_dir):
+        """
+        Returns a data package for one of several specified types.
+
+        Parameters
+        ----------
+        data_type: str
+            Which data type to construct a data package for. Currently supported: 
+            [tfidf|cosine|pca]
+        """
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, mode=0o755)
+
+        filename = data_type + ".tsv"
+        outfile = os.path.join(output_dir, filename)
+
+        if data_type == "tfidf":
+            dat = self.tfidf()
+            title = 'lit-walk Article TF-IDF matrix'
+            desc = 'TF-IDF matrix generated from the titles and abstracts of articles in a users collection.'
+        elif data_type == "cosine":
+            dat = self.similarity()
+            title = 'lit-walk article cosine similarity matrix'
+            desc = 'cosine similarity matrix generated from a tf-idf representation of the users articles'
+        elif data_type == "pca":
+            dat = self.pca()
+            title = 'lit-walk article cosine similarity matrix PCA projection'
+            desc = 'PCA-projected article similarity'
+        else:
+            raise Exception(f"Unsupported data type specified: {data_type}")
+
+        dat.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+
+        # iso 8601 time
+        now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+
+        pkg = frictionless.Package(
+            id = str(uuid.uuid4()),
+            name=data_type,
+            title=title,
+            description=desc,
+            version=__version__,
+            created=now
+        )
+
+        resource = frictionless.describe_resource(filename, basepath=output_dir)
+        pkg.add_resource(resource)
+
+        pkg.to_yaml(os.path.join(output_dir, "datapackage.yml"))
+
+        # pkg = Package(...)
+        # resource = frictionless.describe(dat, name='tfidf')
+        # pkg.add_resource(resource)
+
+        # add general fields
+        #  pkg.id =
+        #  pkg.version = __version__
+        #  pkg.created = now
 
     def _load_config(self):
         """Loads user config / creates one if none exists"""

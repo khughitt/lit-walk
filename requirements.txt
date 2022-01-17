@@ -4,3 +4,4 @@ pyyaml
 rich
 scikit-learn
 matplotlib
+frictionless
