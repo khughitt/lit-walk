@@ -25,7 +25,7 @@ class LitCLI:
         self._setup_logger()
 
         # initialize lit
-        self.lit = LitWalk(self.verbose)
+        self.lit = LitWalk(self.config, self.verbose)
 
         self._logger.info("Initializing lit-walk...")
 
@@ -53,6 +53,23 @@ List of supported commands:
 
         parser.add_argument('command', help='Sub-command to run')
 
+        # default config file location
+        if os.getenv('XDG_CONFIG_HOME'):
+            conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit")
+        elif os.getenv('HOME'):
+            conf_dir = os.path.join(str(os.getenv("HOME")), ".lit")
+        else:
+            raise Exception("Unable to infer location of config file automatically")
+            sys.exit()
+
+        config = os.path.join(conf_dir, "config.yml")
+
+        parser.add_argument(
+            "--config",
+            help=f"Path to lit-walk config file to use (default: {config})",
+            default=config,
+        )
+
         parser.add_argument(
             "--verbose",
             help="If enabled, prints verbose output",
@@ -60,12 +77,10 @@ List of supported commands:
         )
         
         # parse and validate sub-command
-        #args = parser.parse_args(sys.argv[1:])
-
         args, unknown = parser.parse_known_args()
 
-        # set logging verbosity
         self.verbose = args.verbose
+        self.config = args.config
 
         valid_cmds = ['add', 'data', 'info', 'list', 'stats', 'walk']
 
@@ -109,7 +124,7 @@ List of supported commands:
         )
 
         # parse remaining parts of command args
-        args = parser.parse_args(sys.argv[2:])
+        args, unknown = parser.parse_known_args()
 
         # check specified path
         if not os.path.exists(args.bibtex):
@@ -152,7 +167,8 @@ List of supported datatypes:
         )
 
         # parse remaining parts of command args
-        args = parser.parse_args(sys.argv[2:])
+        args, unknown = parser.parse_known_args()
+
         now = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
         out_dir = os.path.join(args.output_dir, f"{now}_{args.type}")
@@ -197,7 +213,7 @@ List of supported datatypes:
         )
 
         # parse remaining parts of command args
-        args = parser.parse_args(sys.argv[2:])
+        args, unknown = parser.parse_known_args()
 
         articles = self.lit.get_articles(args.num_articles, args.missing_abstract)
 
@@ -231,7 +247,7 @@ List of supported datatypes:
         )
 
         # parse remaining parts of command args
-        args = parser.parse_args(sys.argv[2:])
+        args, unknown = parser.parse_known_args()
 
         res = self.lit.walk(args.search)
 
@@ -264,7 +280,7 @@ List of supported datatypes:
         parser = ArgumentParser(description='Display lit collection info')
 
         # parse remaining parts of command args
-        args = parser.parse_args(sys.argv[2:])
+        args, unknown = parser.parse_known_args()
 
         info = self.lit.info()
 
@@ -282,4 +298,4 @@ List of supported datatypes:
         parser = ArgumentParser(description='Display user stats')
 
         # parse remaining parts of command args
-        args = parser.parse_args(sys.argv[2:])
+        args, unknown = parser.parse_known_args()

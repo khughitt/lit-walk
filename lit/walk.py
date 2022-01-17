@@ -26,29 +26,22 @@ from rich import print
 __version__ = "0.2.0"
 
 class LitWalk:
-    def __init__(self, verbose):
+    def __init__(self, config, verbose):
         """
         Initializes a new LitWalk instance.
 
         Parameters
         ----------
+        config: str
+            Path to lit-walk configuration file
         verbose: bool
             If True, verbose logging is enabled
         """
         # setting logging
         self._setup_logger(verbose)
 
-        # config dir
-        if os.getenv('XDG_CONFIG_HOME'):
-            self._conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit")
-        elif os.getenv('HOME'):
-            self._conf_dir = os.path.join(str(os.getenv("HOME")), ".lit")
-        else:
-            raise Exception("Unable to infer location of config file automatically")
-            sys.exit()
-
         # load config
-        self._load_config()
+        self._load_config(config)
 
         # load articles / stats databases
         self._init_db()
@@ -728,9 +721,9 @@ class LitWalk:
         #  pkg.version = __version__
         #  pkg.created = now
 
-    def _load_config(self):
+    def _load_config(self, config):
         """Loads user config / creates one if none exists"""
-        infile = os.path.expanduser(os.path.join(self._conf_dir, "config.yml"))
+        infile = os.path.expanduser(config)
 
         if not os.path.exists(infile):
             self._logger.info(f"Generating a new configuration at {infile}...")
@@ -751,10 +744,8 @@ class LitWalk:
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir, mode=0o755)
 
-        outfile = os.path.join(conf_dir, "config.yml")
-
         default_conf = os.path.join(os.path.abspath(resource_filename(__name__, "conf")), "default.yml")
 
-        shutil.copy(default_conf, outfile)
+        shutil.copy(default_conf, config_file)
 
-        self._logger.info(f"Default config file generated at {outfile}")
+        self._logger.info(f"Default config file generated at {config_file}")
