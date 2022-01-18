@@ -20,6 +20,7 @@ from lit.nlp import STOP_WORDS, LemmaTokenizer
 from pkg_resources import resource_filename
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.manifold import TSNE
 from sklearn.metrics.pairwise import cosine_similarity
 from rich import print
 
@@ -320,6 +321,17 @@ class LitWalk:
                               columns=['PC1', 'PC2'])
 
         return pca_df
+
+    def tsne(self, perplexity=30.0):
+        # generate article similarity matrix (TF-IDF -> cosine similarity)
+        sim_mat = self.similarity()
+
+        tsne = TSNE(n_components=2, perplexity=perplexity, metric='euclidean', 
+                        learning_rate='auto', init='random').fit_transform(sim_mat)
+
+        tsne_dat = pd.DataFrame(tsne, columns=['TSNE-1', 'TSNE-2'], index=sim_mat.index)
+
+        return tsne_dat
 
     def get_keyword_df(self):
         """Returns an <article, keyword> dataframe"""
@@ -689,7 +701,7 @@ class LitWalk:
         ----------
         data_type: str
             Which data type to construct a data package for. Currently supported: 
-            [tfidf|cosine|pca]
+            [tfidf|cosine|pca|tsne]
         """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, mode=0o755)
@@ -709,6 +721,10 @@ class LitWalk:
             dat = self.pca()
             title = 'lit-walk article cosine similarity matrix PCA projection'
             desc = 'PCA-projected article similarity'
+        elif data_type == "tsne":
+            dat = self.tsne()
+            title = 'lit-walk article cosine similarity matrix t-SNE projection'
+            desc = 't-SNE projected article similarity'
         else:
             raise Exception(f"Unsupported data type specified: {data_type}")
 
@@ -730,10 +746,6 @@ class LitWalk:
         pkg.add_resource(resource)
 
         pkg.to_yaml(os.path.join(output_dir, "datapackage.yml"))
-
-        # pkg = Package(...)
-        # resource = frictionless.describe(dat, name='tfidf')
-        # pkg.add_resource(resource)
 
         # add general fields
         #  pkg.id =

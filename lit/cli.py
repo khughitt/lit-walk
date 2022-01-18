@@ -151,6 +151,7 @@ List of supported datatypes:
    tfidf   Article TF-IDF matrix
    cosine  Article Cosine similarity matrix
    pca     Article PCA projection
+   tsne    Article t-SNE projection
 ''')
 
         parser.add_argument(
@@ -182,7 +183,7 @@ List of supported datatypes:
             print("[ERROR] Data type to generate must be specified")
             parser.print_help()
             sys.exit()
-        elif args.type in ['tfidf', 'pca', 'cosine']:
+        elif args.type in ['tfidf', 'pca', 'tsne', 'cosine']:
             self.lit.create_pkg(args.type, out_dir)
         else:
             raise Exception(f"Unrecognized data type specified: {args.type}")
