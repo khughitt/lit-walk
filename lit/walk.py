@@ -66,6 +66,7 @@ class LitWalk:
         If the database does not already exist, it will be created.
         """
         dbpath = os.path.join(self._config['data_dir'], 'db.sqlite')
+        dbpath = os.path.realpath(os.path.expanduser(os.path.expandvars(dbpath)))
 
         if not os.path.exists(self._config['data_dir']):
             os.makedirs(self._config['data_dir'], mode=0o755)
@@ -239,26 +240,6 @@ class LitWalk:
         except sqlite3.Error as e:
             print(e)
 
-
-    #  def _create_topics_table(self, cursor):
-    #      """
-    #      Table mapping from specific topics to their place in a topic embedding matrix;
-    #      each entry effectively represents a row in the embedding matrix.
-    #      """
-    #      sql = """
-    #      CREATE TABLE IF NOT EXISTS topics (
-    #          topic text,
-    #          num_articles integer,
-    #          times_reviewed integer
-    #      );
-    #      """
-    #      self._logger.info("Creating topics table...")
-    #
-    #      try:
-    #          cursor.execute(sql)
-    #      except sqlite3.Error as e:
-    #          print(e)
-
     def _sync(self):
         """
         1. extends article keywords
@@ -322,11 +303,6 @@ class LitWalk:
         return sim_mat
 
     def pca(self):
-        # testing: perform pca projection on <article x keyword> matrix
-        # df = self.get_keyword_df()
-        # exclude articles with no associated keywords..
-        #df = df[df.sum(axis=1) > 0]
-
         # generate article similarity matrix (TF-IDF -> cosine similarity)
         sim_mat = self.similarity()
 
@@ -515,6 +491,10 @@ class LitWalk:
         cursor = self.db.cursor()
 
         num_articles = self.num_articles()
+
+        if num_articles == 0:
+            raise Exception("No articles found!")
+
         ind = random.randint(1, num_articles)
 
         res = cursor.execute(f"SELECT * FROM articles WHERE id={ind};")
@@ -689,15 +669,14 @@ class LitWalk:
         """Returns the number of articles present in the user's collection"""
         cursor = self.db.cursor()
 
-        sql = "SELECT COUNT(id) FROM articles"
+        sql = "SELECT COUNT(id) FROM articles;"
 
         if self._config['dev_mode']['enabled']:
             sql += f" LIMIT {self._config['dev_mode']['subsample']}"
 
         cursor.execute(sql)
-
         num_articles = cursor.fetchall()[0][0]
-
+        
         cursor.close()
 
         return num_articles
