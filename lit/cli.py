@@ -124,7 +124,9 @@ List of supported commands:
         )
 
         # parse remaining parts of command args
-        args, unknown = parser.parse_known_args()
+        input_args = [x for x in sys.argv[1:] if x != "add"]
+
+        args, unknown = parser.parse_known_args(input_args)
 
         # check specified path
         if not os.path.exists(args.bibtex):
@@ -167,7 +169,9 @@ List of supported datatypes:
         )
 
         # parse remaining parts of command args
-        args, unknown = parser.parse_known_args()
+        input_args = [x for x in sys.argv[1:] if x != "data"]
+
+        args, unknown = parser.parse_known_args(input_args)
 
         now = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
@@ -213,7 +217,9 @@ List of supported datatypes:
         )
 
         # parse remaining parts of command args
-        args, unknown = parser.parse_known_args()
+        input_args = [x for x in sys.argv[1:] if x != "list"]
+
+        args, unknown = parser.parse_known_args(input_args)
 
         articles = self.lit.get_articles(args.num_articles, args.missing_abstract)
 
@@ -247,7 +253,8 @@ List of supported datatypes:
         )
 
         # parse remaining parts of command args
-        args, unknown = parser.parse_known_args()
+        input_args = [x for x in sys.argv[1:] if x != "walk"]
+        args, unknown = parser.parse_known_args(input_args)
 
         res = self.lit.walk(args.search)
 
@@ -280,7 +287,8 @@ List of supported datatypes:
         parser = ArgumentParser(description='Display lit collection info')
 
         # parse remaining parts of command args
-        args, unknown = parser.parse_known_args()
+        input_args = [x for x in sys.argv[1:] if x != "info"]
+        args, unknown = parser.parse_known_args(input_args)
 
         info = self.lit.info()
 
@@ -298,4 +306,5 @@ List of supported datatypes:
         parser = ArgumentParser(description='Display user stats')
 
         # parse remaining parts of command args
-        args, unknown = parser.parse_known_args()
+        input_args = [x for x in sys.argv[1:] if x != "stats"]
+        args, unknown = parser.parse_known_args(input_args)

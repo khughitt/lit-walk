@@ -38,7 +38,8 @@ class LitWalk:
             If True, verbose logging is enabled
         """
         # setting logging
-        self._setup_logger(verbose)
+        self.verbose = verbose
+        self._setup_logger()
 
         # load config
         self._load_config(config)
@@ -46,14 +47,14 @@ class LitWalk:
         # load articles / stats databases
         self._init_db()
 
-    def _setup_logger(self, verbose):
+    def _setup_logger(self):
         """Sets up logger to print messages to STDOUT"""
         logging.basicConfig(stream=sys.stdout,
                             format='[%(levelname)s] %(message)s')
 
         self._logger = logging.getLogger('lit')
 
-        if verbose:
+        if self.verbose:
             self._logger.setLevel(logging.DEBUG)
         else:
             self._logger.setLevel(logging.WARN)
@@ -119,7 +120,7 @@ class LitWalk:
         # get a list of keywords of interest
         target_keywords = self._get_target_keywords(articles)
 
-        cur = self.db.cursor()
+        cursor = self.db.cursor()
 
         for article in articles:
             if article['keywords'] is None:
@@ -135,7 +136,7 @@ class LitWalk:
                     self._logger.info(f"Adding {len(new_keywords)} new keywords..")
 
                     # update db
-                    res = cur.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
+                    res = cursor.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
                                       ("; ".join(new_keywords), article["doi"]))
 
         self.db.commit()
@@ -285,7 +286,8 @@ class LitWalk:
         # get lemmatization tokenizer, if enabled
         if self._config['tokenization']['lemmatize']:
             tokenizer = LemmaTokenizer(stopwords,
-                                       self._config['tokenization']['min_length'])
+                                       self._config['tokenization']['min_length'], 
+                                       self.verbose)
 
         # generate TF-IDF matrix
         tfidf_vectorizer = TfidfVectorizer(max_df=self._config['tfidf']['max_df'],
@@ -346,9 +348,15 @@ class LitWalk:
     def get_keyword_df(self):
         """Returns an <article, keyword> dataframe"""
         # get up-to-date article entries
-        cur = self.db.cursor()
-        res = cur.execute("SELECT doi, keywords FROM articles ORDER BY doi;")
-        articles = cur.fetchall()
+        cursor = self.db.cursor()
+        
+        sql = "SELECT doi, keywords FROM articles ORDER BY doi"
+
+        if self._config['dev_mode']['enabled']:
+            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
+
+        res = cursor.execute(sql)
+        articles = cursor.fetchall()
 
         # convert to list of dicts
         article_dicts = []
@@ -387,9 +395,15 @@ class LitWalk:
         Returns a dict mapping from article DOIs to concatenated titles + abstracts.
         """
         # get article titles + abstracts
-        cur = self.db.cursor()
-        res = cur.execute("SELECT doi, title, abstract FROM articles ORDER BY doi;")
-        articles = cur.fetchall()
+        cursor = self.db.cursor()
+
+        sql = "SELECT doi, title, abstract FROM articles ORDER BY doi"
+
+        if self._config['dev_mode']['enabled']:
+            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
+
+        res = cursor.execute(sql)
+        articles = cursor.fetchall()
 
         article_texts = {}
 
@@ -402,17 +416,22 @@ class LitWalk:
 
         return article_texts
 
-    def get_doi(self, cur):
+    def get_doi(self, cursor):
         """
         Returns a list of existing DOIs in the database
         """
-        cur.execute("SELECT doi FROM articles;")
+        sql = "SELECT doi FROM articles"
 
-        return [x[0] for x in cur.fetchall()]
+        if self._config['dev_mode']['enabled']:
+            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
+
+        cursor.execute(sql)
+
+        return [x[0] for x in cursor.fetchall()]
 
     def get_articles(self, n=None, missing_abstracts=False):
         """Retrieves articles table"""
-        cur = self.db.cursor()
+        cursor = self.db.cursor()
 
         # all articles
         if n is None:
@@ -421,15 +440,18 @@ class LitWalk:
             else:
                 sql = "SELECT * FROM articles;"
         else:
+            if self._config['dev_mode']['enabled']:
+                n = min(n, self._config['dev_mode']['subsample'])
+
             # subset of articles
             if missing_abstracts:
                 sql = f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles WHERE abstract IS NULL ORDER BY RANDOM() LIMIT {n})"
             else:
                 sql = f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY RANDOM() LIMIT {n})"
 
-        res = cur.execute(sql)
+        res = cursor.execute(sql)
 
-        articles = cur.fetchall()
+        articles = cursor.fetchall()
 
         colnames = [x[0] for x in res.description]
 
@@ -490,16 +512,16 @@ class LitWalk:
         """
         Gets a single random article from among all articles
         """
-        cur = self.db.cursor()
+        cursor = self.db.cursor()
 
         num_articles = self.num_articles()
         ind = random.randint(1, num_articles)
 
-        res = cur.execute(f"SELECT * FROM articles WHERE id={ind};")
-        article = cur.fetchall()[0]
+        res = cursor.execute(f"SELECT * FROM articles WHERE id={ind};")
+        article = cursor.fetchall()[0]
         colnames = [x[0] for x in res.description]
         article = dict(zip(colnames, article))
-        cur.close()
+        cursor.close()
 
         res = {
             "article": article,
@@ -511,12 +533,12 @@ class LitWalk:
 
     def update_stats(self, doi):
         """Add entry to stats table"""
-        cur = self.db.cursor()
+        cursor = self.db.cursor()
 
-        res = cur.execute("INSERT INTO stats(doi, date) VALUES (?, ?);",
+        res = cursor.execute("INSERT INTO stats(doi, date) VALUES (?, ?);",
                           (doi, datetime.datetime.now()))
         self.db.commit()
-        cur.close()
+        cursor.close()
 
     def get_excluded_keywords(self):
         """Returns a list of phrases to ignore when parsing/inferring keywords"""
@@ -554,11 +576,11 @@ class LitWalk:
             num_missing = len(bd.entries) - len(articles)
             self._logger.warn(f"Excluding {num_missing} articles with no associated DOI")
 
-        cur = self.db.cursor()
+        cursor = self.db.cursor()
 
         # exclude existing articles
         if not skip_check:
-            existing_dois = self.get_doi(cur)
+            existing_dois = self.get_doi(cursor)
 
             num_before = len(articles)
             articles = [x for x in articles if x['doi'] not in existing_dois]
@@ -575,11 +597,11 @@ class LitWalk:
         if num_after > 0:
             self._logger.info(f"Adding {num_after} new articles..")
 
-            self.add_articles(articles, cur)
+            self.add_articles(articles, cursor)
 
-        cur.close()
+        cursor.close()
 
-    def add_articles(self, articles, cur):
+    def add_articles(self, articles, cursor):
         """Adds one or more articles to the users collection"""
         excluded_keywords = self.get_excluded_keywords()
 
@@ -617,7 +639,7 @@ class LitWalk:
 
                 entry['keywords'] = "; ".join(keywords)
 
-            self.add_article(cur, tuple(entry.values()))
+            self.add_article(cursor, tuple(entry.values()))
 
         self._logger.info(f"Finished!")
 
@@ -632,15 +654,27 @@ class LitWalk:
         self.db.commit()
 
     def info(self):
-        """Returns basic information about lit setup"""
+        """
+        Returns basic information about lit setup.
+
+        Note that that info command does ignores "dev_mode", if enabled.
+        """
         # determine how many articles are missing doi/absract/keywords
-        cur = self.db.cursor()
+        cursor = self.db.cursor()
 
-        missing_doi = cur.execute("SELECT COUNT(*) FROM articles WHERE doi IS NULL;").fetchall()[0][0]
-        missing_abstract = cur.execute("SELECT COUNT(*) FROM articles WHERE abstract IS NULL;").fetchall()[0][0]
-        missing_keywords = cur.execute("SELECT COUNT(*) FROM articles WHERE keywords IS NULL;").fetchall()[0][0]
+        # count # articles with missing DOIs
+        sql = "SELECT COUNT(*) FROM articles WHERE doi IS NULL"
+        missing_doi = cursor.execute(sql).fetchall()[0][0]
 
-        cur.close()
+        # count # articles with missing abstracts
+        sql2 = "SELECT COUNT(*) FROM articles WHERE abstract IS NULL"
+        missing_abstract = cursor.execute(sql2).fetchall()[0][0]
+
+        # count # articles with missing keywords
+        sql3 = "SELECT COUNT(*) FROM articles WHERE keywords IS NULL"
+        missing_keywords = cursor.execute(sql3).fetchall()[0][0]
+
+        cursor.close()
 
         return {
             "num_articles": self.num_articles(),
@@ -653,12 +687,18 @@ class LitWalk:
 
     def num_articles(self):
         """Returns the number of articles present in the user's collection"""
-        cur = self.db.cursor()
-        cur.execute("SELECT COUNT(id) FROM articles;")
+        cursor = self.db.cursor()
 
-        num_articles = cur.fetchall()[0][0]
+        sql = "SELECT COUNT(id) FROM articles"
 
-        cur.close()
+        if self._config['dev_mode']['enabled']:
+            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
+
+        cursor.execute(sql)
+
+        num_articles = cursor.fetchall()[0][0]
+
+        cursor.close()
 
         return num_articles
 

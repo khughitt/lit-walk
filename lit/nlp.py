@@ -49,8 +49,9 @@ STOP_WORDS = ['a', 'about', 'above', 'across', 'after', 'afterwards', 'again',
         'you', 'your', 'yours', 'yourself', 'yourselves']
 
 class LemmaTokenizer:
-    def __init__(self, stopwords, min_length=1):
-        self.nlp = stanza.Pipeline(lang='en', processors='tokenize,pos,lemma')
+    def __init__(self, stopwords, min_length=1, verbose=False):
+        self.nlp = stanza.Pipeline(lang='en', processors='tokenize,pos,lemma',
+                                   verbose=verbose)
 
         self.min_length = min_length
 
