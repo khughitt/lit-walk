@@ -184,6 +184,7 @@ List of supported datatypes:
             parser.print_help()
             sys.exit()
         elif args.type in ['tfidf', 'pca', 'tsne', 'cosine']:
+            print(f"Generating {args.type} data package in {out_dir}..")
             self.lit.create_pkg(args.type, out_dir)
         else:
             raise Exception(f"Unrecognized data type specified: {args.type}")

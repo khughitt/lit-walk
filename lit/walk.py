@@ -297,23 +297,21 @@ class LitWalk:
 
         return df
 
-    def similarity(self):
+    def similarity(self, tfidf):
         """
         Computes an article similarity matrix
 
         At present, uses cosine similarity of a TF-IDF transformed <article x word> matrix
         """
-        tfidf = self.tfidf()
-
         sim_mat = pd.DataFrame(cosine_similarity(tfidf),
                                index=tfidf.index, columns=tfidf.index)
 
         return sim_mat
 
-    def pca(self):
-        # generate article similarity matrix (TF-IDF -> cosine similarity)
-        sim_mat = self.similarity()
-
+    def pca(self, sim_mat):
+        """
+        Article PCA projection
+        """
         pca = PCA(n_components=2, whiten=False, random_state=1)
         pca = pca.fit(sim_mat.to_numpy())
 
@@ -329,10 +327,10 @@ class LitWalk:
 
         return pca_df
 
-    def tsne(self, perplexity=30.0):
-        # generate article similarity matrix (TF-IDF -> cosine similarity)
-        sim_mat = self.similarity()
-
+    def tsne(self, sim_mat, perplexity=30.0):
+        """
+        Article t-SNE projection
+        """
         tsne = TSNE(n_components=2, perplexity=perplexity, metric='euclidean',
                         learning_rate='auto', init='random').fit_transform(sim_mat)
 
@@ -713,31 +711,53 @@ class LitWalk:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, mode=0o755)
 
-        filename = data_type + ".tsv"
-        outfile = os.path.join(output_dir, filename)
+        # generate TF-IDF transformed word matrix; currently used as the basis for all
+        # other data types
+        tfidf = self.tfidf()
+
+        # save tfidf to disk and add to resource list
+        outfile = os.path.join(output_dir, "tfidf.tsv")
+        tfidf.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+
+        resource_filenames = ['tfidf.tsv']
 
         if data_type == "tfidf":
-            dat = self.tfidf()
             title = 'lit-walk Article TF-IDF matrix'
             desc = 'TF-IDF matrix generated from the titles and abstracts of articles in a users collection.'
-        elif data_type == "cosine":
-            dat = self.similarity()
-            title = 'lit-walk article cosine similarity matrix'
-            desc = 'cosine similarity matrix generated from a tf-idf representation of the users articles'
-        elif data_type == "pca":
-            dat = self.pca()
-            title = 'lit-walk article cosine similarity matrix PCA projection'
-            desc = 'PCA-projected article similarity'
-        elif data_type == "tsne":
-            dat = self.tsne()
-            title = 'lit-walk article cosine similarity matrix t-SNE projection'
-            desc = 't-SNE projected article similarity'
         else:
-            raise Exception(f"Unsupported data type specified: {data_type}")
+            # generate article similarity matrix from TF-IDF matrix
+            sim_mat = self.similarity(tfidf)
 
-        dat.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+            outfile = os.path.join(output_dir, "sim_mat.tsv")
+            sim_mat.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
 
-        # iso 8601 time
+            resource_filenames.append("sim_mat.tsv")
+
+            if data_type == "cosine":
+                title = 'lit-walk article cosine similarity matrix'
+                desc = 'cosine similarity matrix generated from a tf-idf representation of the users articles'
+            elif data_type == "pca":
+                pca = self.pca(sim_mat)
+                title = 'lit-walk article cosine similarity matrix PCA projection'
+                desc = 'PCA-projected article similarity'
+
+                outfile = os.path.join(output_dir, "pca.tsv")
+                pca.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+
+                resource_filenames.append("pca.tsv")
+            elif data_type == "tsne":
+                tsne = self.tsne(sim_mat)
+                title = 'lit-walk article cosine similarity matrix t-SNE projection'
+                desc = 't-SNE projected article similarity'
+
+                outfile = os.path.join(output_dir, "tsne.tsv")
+                tsne.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+
+                resource_filenames.append("tsne.tsv")
+            else:
+                raise Exception(f"Unsupported data type specified: {data_type}")
+
+        # create data package
         now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f%z')
 
         pkg = frictionless.Package(
@@ -749,15 +769,13 @@ class LitWalk:
             created=now
         )
 
-        resource = frictionless.describe_resource(filename, basepath=output_dir)
-        pkg.add_resource(resource)
+        # add resources to package
+        for filename in resource_filenames:
+            resource = frictionless.describe_resource(filename, basepath=output_dir)
+            pkg.add_resource(resource)
 
+        # write datapackage.yml
         pkg.to_yaml(os.path.join(output_dir, "datapackage.yml"))
-
-        # add general fields
-        #  pkg.id =
-        #  pkg.version = __version__
-        #  pkg.created = now
 
     def _load_config(self, config):
         """Loads user config / creates one if none exists"""
