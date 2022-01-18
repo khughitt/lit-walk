@@ -265,17 +265,24 @@ class LitWalk:
         # determine tokenizer to use
         tokenizer = None
 
+        # default token pattern, modifed to account for alternate minimum lengths
+        min_length = self._config['tokenization']['min_length']
+        token_pattern = r"(?u)\b\w{" + str(min_length) + r",}\b"
+
         # get lemmatization tokenizer, if enabled
         if self._config['tokenization']['lemmatize']:
             tokenizer = LemmaTokenizer(stopwords,
-                                       self._config['tokenization']['min_length'], 
+                                       self._config['tokenization']['min_length'],
                                        self.verbose)
+        else:
+            tokenizer = None
 
         # generate TF-IDF matrix
         tfidf_vectorizer = TfidfVectorizer(max_df=self._config['tfidf']['max_df'],
                                            min_df=self._config['tfidf']['min_df'],
                                            max_features=self._config['tfidf']['max_features'],
                                            stop_words=stopwords,
+                                           token_pattern=token_pattern,
                                            tokenizer=tokenizer)
 
         tfidf = tfidf_vectorizer.fit_transform(texts.values())
@@ -298,7 +305,7 @@ class LitWalk:
         """
         tfidf = self.tfidf()
 
-        sim_mat = pd.DataFrame(cosine_similarity(tfidf), 
+        sim_mat = pd.DataFrame(cosine_similarity(tfidf),
                                index=tfidf.index, columns=tfidf.index)
 
         return sim_mat
@@ -326,7 +333,7 @@ class LitWalk:
         # generate article similarity matrix (TF-IDF -> cosine similarity)
         sim_mat = self.similarity()
 
-        tsne = TSNE(n_components=2, perplexity=perplexity, metric='euclidean', 
+        tsne = TSNE(n_components=2, perplexity=perplexity, metric='euclidean',
                         learning_rate='auto', init='random').fit_transform(sim_mat)
 
         tsne_dat = pd.DataFrame(tsne, columns=['TSNE-1', 'TSNE-2'], index=sim_mat.index)
@@ -337,7 +344,7 @@ class LitWalk:
         """Returns an <article, keyword> dataframe"""
         # get up-to-date article entries
         cursor = self.db.cursor()
-        
+
         sql = "SELECT doi, keywords FROM articles ORDER BY doi"
 
         if self._config['dev_mode']['enabled']:
@@ -688,7 +695,7 @@ class LitWalk:
 
         cursor.execute(sql)
         num_articles = cursor.fetchall()[0][0]
-        
+
         cursor.close()
 
         return num_articles
@@ -700,7 +707,7 @@ class LitWalk:
         Parameters
         ----------
         data_type: str
-            Which data type to construct a data package for. Currently supported: 
+            Which data type to construct a data package for. Currently supported:
             [tfidf|cosine|pca|tsne]
         """
         if not os.path.exists(output_dir):
