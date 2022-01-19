@@ -22,6 +22,7 @@ from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.cluster import SpectralClustering
 from rich import print
 
 __version__ = "0.2.0"
@@ -698,7 +699,7 @@ class LitWalk:
 
         return num_articles
 
-    def create_pkg(self, data_type, output_dir):
+    def create_pkg(self, data_type, output_dir, num_clusters=5):
         """
         Returns a data package for one of several specified types.
 
@@ -707,6 +708,11 @@ class LitWalk:
         data_type: str
             Which data type to construct a data package for. Currently supported:
             [tfidf|cosine|pca|tsne]
+        output_dir: str
+            Location to write generate data package to (default: current directory)
+        num_clusters: int
+            Number of clusters to detect; applies to cosine similiarity matrix step
+            (default: 5)
         """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, mode=0o755)
@@ -719,7 +725,6 @@ class LitWalk:
         outfile = os.path.join(output_dir, "tfidf.tsv")
         tfidf.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t', index=False)
 
-
         resource_filenames = ['tfidf.tsv']
 
         if data_type == "tfidf":
@@ -731,8 +736,29 @@ class LitWalk:
 
             outfile = os.path.join(output_dir, "sim_mat.tsv")
             sim_mat.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t', index=False)
-
             resource_filenames.append("sim_mat.tsv")
+
+            # cluster article cosine similarities
+            sc = SpectralClustering(num_clusters, eigen_solver='arpack',
+                                    affinity='precomputed', n_init=100,
+                                    assign_labels='discretize')
+            clusters = sc.fit_predict(sim_mat)  
+
+            # create article metadata table and add cluster assignments
+            articles = self.get_articles()
+
+            doi_titles = {x['doi']: x['title'] for x in articles}
+            mdata_titles = [doi_titles[doi] for doi in sim_mat.index]
+
+            mdata = pd.DataFrame({
+                "doi": sim_mat.index, 
+                "title": mdata_titles,
+                "cluster": clusters
+            })
+
+            outfile = os.path.join(output_dir, "articles.tsv")
+            mdata.to_csv(outfile, sep='\t', index=False)
+            resource_filenames.append("articles.tsv")
 
             if data_type == "cosine":
                 title = 'lit-walk article cosine similarity matrix'

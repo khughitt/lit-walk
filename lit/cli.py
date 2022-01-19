@@ -162,6 +162,14 @@ List of supported datatypes:
         )
 
         parser.add_argument(
+            "-k",
+            "--num-clusters",
+            help="Number of clusters to detect (at present, applied to cosine similarity matrix)",
+            default=5,
+            type=int,
+        )
+
+        parser.add_argument(
             "-o",
             "--output-dir",
             help="Location to write dataset",
@@ -185,7 +193,7 @@ List of supported datatypes:
             sys.exit()
         elif args.type in ['tfidf', 'pca', 'tsne', 'cosine']:
             print(f"Generating {args.type} data package in {out_dir}..")
-            self.lit.create_pkg(args.type, out_dir)
+            self.lit.create_pkg(args.type, out_dir, num_clusters=args.num_clusters)
         else:
             raise Exception(f"Unrecognized data type specified: {args.type}")
 
