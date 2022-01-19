@@ -717,7 +717,8 @@ class LitWalk:
 
         # save tfidf to disk and add to resource list
         outfile = os.path.join(output_dir, "tfidf.tsv")
-        tfidf.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+        tfidf.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t', index=False)
+
 
         resource_filenames = ['tfidf.tsv']
 
@@ -729,7 +730,7 @@ class LitWalk:
             sim_mat = self.similarity(tfidf)
 
             outfile = os.path.join(output_dir, "sim_mat.tsv")
-            sim_mat.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+            sim_mat.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t', index=False)
 
             resource_filenames.append("sim_mat.tsv")
 
@@ -742,7 +743,7 @@ class LitWalk:
                 desc = 'PCA-projected article similarity'
 
                 outfile = os.path.join(output_dir, "pca.tsv")
-                pca.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+                pca.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t', index=False)
 
                 resource_filenames.append("pca.tsv")
             elif data_type == "tsne":
@@ -751,7 +752,7 @@ class LitWalk:
                 desc = 't-SNE projected article similarity'
 
                 outfile = os.path.join(output_dir, "tsne.tsv")
-                tsne.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t')
+                tsne.reset_index().rename(columns={'index': 'doi'}).to_csv(outfile, sep='\t', index=False)
 
                 resource_filenames.append("tsne.tsv")
             else:
