@@ -1,6 +1,11 @@
 lit-walk
 ========
 
+**Status (Jan 2022)**: Early development & testing.
+
+Overview
+--------
+
 _A random walk across the science literature.._
 
 **Motivation**
