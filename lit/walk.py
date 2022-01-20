@@ -335,7 +335,7 @@ class LitWalk:
         tsne = TSNE(n_components=2, perplexity=perplexity, metric='euclidean',
                         learning_rate='auto', init='random').fit_transform(sim_mat)
 
-        tsne_dat = pd.DataFrame(tsne, columns=['TSNE-1', 'TSNE-2'], index=sim_mat.index)
+        tsne_dat = pd.DataFrame(tsne, columns=['TSNE1', 'TSNE2'], index=sim_mat.index)
 
         return tsne_dat
 

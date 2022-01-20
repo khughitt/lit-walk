@@ -1,7 +1,7 @@
 lit-walk
 ========
 
-_Tools to help with understanding the scientific literature.._
+_A random walk across the science literature.._
 
 **Motivation**
 
@@ -31,4 +31,5 @@ Usage
 lit-walk add path/to/refs.bib
 lit-walk info
 lit-walk walk
+lit-walk data [tfidf|cosine|pca|tsne]
 ```
