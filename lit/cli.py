@@ -55,9 +55,9 @@ List of supported commands:
 
         # default config file location
         if os.getenv('XDG_CONFIG_HOME'):
-            conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit")
+            conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit-walk")
         elif os.getenv('HOME'):
-            conf_dir = os.path.join(str(os.getenv("HOME")), ".lit")
+            conf_dir = os.path.join(str(os.getenv("HOME")), ".lit-walk")
         else:
             raise Exception("Unable to infer location of config file automatically")
             sys.exit()
