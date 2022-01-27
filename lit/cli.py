@@ -1,6 +1,7 @@
 """
 lit-walk CLI
 """
+import json
 import os
 import sys
 import datetime
@@ -148,16 +149,17 @@ List of supported commands:
             usage='''lit data <type> [<args>]
 
 List of supported datatypes:
-   tfidf   Article TF-IDF matrix
-   cosine  Article Cosine similarity matrix
-   pca     Article PCA projection
-   tsne    Article t-SNE projection
+   articles Article dump (JSON)
+   tfidf    Article TF-IDF matrix
+   cosine   Article Cosine similarity matrix
+   pca      Article PCA projection
+   tsne     Article t-SNE projection
 ''')
 
         parser.add_argument(
             "type",
             nargs="?",
-            help="Type of dataset to return (tfidf|pca|sim|tsne)",
+            help="Type of dataset to return (articles|tfidf|pca|sim|tsne)",
             type=str
         )
 
@@ -191,6 +193,15 @@ List of supported datatypes:
             print("[ERROR] Data type to generate must be specified")
             parser.print_help()
             sys.exit()
+        elif args.type == "articles":
+            print(f"Saving articles.json to {out_dir}..")
+            articles = self.lit.get_articles()
+
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir, mode=0o755)
+
+            with open(os.path.join(out_dir, 'articles.json'), 'w') as fp:
+                json.dump(articles, fp)
         elif args.type in ['tfidf', 'pca', 'tsne', 'cosine']:
             print(f"Generating {args.type} data package in {out_dir}..")
             self.lit.create_pkg(args.type, out_dir, num_clusters=args.num_clusters)
