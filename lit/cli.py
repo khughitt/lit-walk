@@ -304,9 +304,9 @@ List of supported datatypes:
 
         print(f"[sky_blue1]# Articles[/sky_blue1]: {info['num_articles']}")
         print(f"[salmon1]Incomplete Metadata[/salmon1]:")
-        print(f"[light_salmon1]- Missing \"DOI\":[/light_salmon1]: {info['missing']['doi']}")
-        print(f"[light_salmon1]- Missing \"abstract\":[/light_salmon1]: {info['missing']['abstract']}")
-        print(f"[light_salmon1]- Missing \"keywords\":[/light_salmon1]: {info['missing']['keywords']}")
+        print(f"[light_salmon1]- Missing \"DOI\":[/light_salmon1] {info['missing']['doi']}")
+        print(f"[light_salmon1]- Missing \"abstract\":[/light_salmon1] {info['missing']['abstract']}")
+        print(f"[light_salmon1]- Missing \"keywords\":[/light_salmon1] {info['missing']['keywords']}")
 
     def stats(self):
         """
@@ -314,6 +314,8 @@ List of supported datatypes:
         """
         # parse "stats"-specific args
         parser = ArgumentParser(description='Display user stats')
+
+        stats = self.lit.stats()
 
         # parse remaining parts of command args
         input_args = [x for x in sys.argv[1:] if x != "stats"]

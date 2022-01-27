@@ -456,6 +456,23 @@ class LitWalk:
 
         return article_dicts
 
+    def stats(self):
+        """
+        Returns user stats
+
+        - [ ] add param to limit to last N days
+        """
+        cursor = self.db.cursor()
+
+        sql = "SELECT stats.doi, stats.date, articleTopics.topic FROM stats INNER JOIN articleTopics ON stats.doi = articleTopics.doi;"
+        res = cursor.execute(sql)
+        rows = cursor.fetchall()[0]
+
+        breakpoint()
+        #  colnames = [x[0] for x in res.description]
+        #  article = dict(zip(colnames, article))
+        cursor.close()
+
     def walk(self, search):
         """Chooses an article at random"""
 
