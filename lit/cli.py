@@ -286,6 +286,7 @@ List of supported datatypes:
         
         year_str = f"[light_goldenrod3]{article['year']}[/light_goldenrod3]"
         print(f"[bold light_coral]{article['title']}[/bold light_coral] ({year_str})")
+        print(f"[bold light_salmon1]{article['author']}[/bold light_salmon1]")
 
         if article['abstract'] is not None:
             print(Padding(article['abstract'], (1, 1), style='grey89'))

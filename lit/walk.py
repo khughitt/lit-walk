@@ -273,6 +273,7 @@ class LitWalk:
         # get lemmatization tokenizer, if enabled
         if self._config['tokenization']['lemmatize']:
             tokenizer = LemmaTokenizer(stopwords,
+                                       self._logger,
                                        self._config['tokenization']['min_length'],
                                        self.verbose)
         else:

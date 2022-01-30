@@ -3,7 +3,6 @@ NLP-related functionality for lit-walk
 
 - [ ] check for availability of stanza "en" model and d/l if needed?
 """
-import stanza
 
 # stop words
 # source: gensim.parsing.preprocessing.STOPWORDS
@@ -49,9 +48,19 @@ STOP_WORDS = ['a', 'about', 'above', 'across', 'after', 'afterwards', 'again',
         'you', 'your', 'yours', 'yourself', 'yourselves']
 
 class LemmaTokenizer:
-    def __init__(self, stopwords, min_length=1, verbose=False):
-        self.nlp = stanza.Pipeline(lang='en', processors='tokenize,pos,lemma',
-                                   verbose=verbose)
+    def __init__(self, stopwords, logger, min_length=1, verbose=False):
+        import stanza
+        from stanza.pipeline.core import ResourcesFileNotFoundError
+
+        try:
+            self.nlp = stanza.Pipeline(lang='en', processors='tokenize,pos,lemma',
+                                       verbose=verbose)
+        except ResourcesFileNotFoundError:
+            logger.info("Downloading Stanza English language models for new install..")
+            stanza.download('en')
+
+            self.nlp = stanza.Pipeline(lang='en', processors='tokenize,pos,lemma',
+                                       verbose=verbose)
 
         self.min_length = min_length
 
