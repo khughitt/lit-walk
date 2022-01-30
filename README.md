@@ -6,6 +6,8 @@ lit-walk
 Overview
 --------
 
+![lit-walk screenshot](extra/screenshot.png)
+
 _A random walk across the science literature.._
 
 The purpose of this tool, is help one explore their literature collection in a
