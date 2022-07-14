@@ -71,7 +71,7 @@ class LitWalk:
         dbpath = os.path.realpath(os.path.expanduser(os.path.expandvars(dbpath)))
 
         if not os.path.exists(self._config['data_dir']):
-            os.makedirs(self._config['data_dir'], mode=0o755)
+            os.makedirs(os.path.expanduser(self._config['data_dir']), mode=0o755)
 
         # connect to db
         try:
@@ -115,7 +115,6 @@ class LitWalk:
         Next, the title/abstract of each article is scanned, and any detected keywords which are not already prese
 
         TODO:
-        - [ ] extend keywords for articles that already have some
         - [ ] detect new keywords in titles/abstracts?
         - [ ] stem/lemmatize prior to matching
         - [ ] decide on appropriate way to choose keywords to check against..
@@ -127,22 +126,29 @@ class LitWalk:
 
         for article in articles:
             if article['keywords'] is None:
-                new_keywords = []
+                keywords = []
+            else:
+                keywords = article['keywords'].split("; ")
 
-                for keyword in target_keywords:
-                    if (keyword in article['title'].lower() or
-                        (article['abstract'] is not None and keyword in
-                         article['abstract'].lower())):
-                        new_keywords.append(keyword)
+            for keyword in target_keywords:
+                if (keyword in article['title'].lower() or
+                    (article['abstract'] is not None and keyword in
+                        article['abstract'].lower())):
+                    keywords.append(keyword)
 
-                if len(new_keywords) > 0:
-                    self._logger.info(f"Adding {len(new_keywords)} new keywords..")
+            keywords_str = "; ".join(sorted(list(set(keywords))));
 
-                    # update db
-                    res = cursor.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
-                                      ("; ".join(new_keywords), article["doi"]))
+            if keywords_str != article['keywords']:
+                #  self._logger.info(f"Adding {len(keywords)} new keywords..")
+                self._logger.info(f"Updating keywords for {article['doi']}")
+
+                # update db
+                res = cursor.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
+                                    (keywords_str, article["doi"]))
 
         self.db.commit()
+
+        cursor.close()
 
     def _get_target_keywords(self, articles):
         """
@@ -247,9 +253,11 @@ class LitWalk:
         1. extends article keywords
         2. creates <article x topic> mat?
         """
+        self._logger.info("Synchronizing articles db..")
+
         articles = self.get_articles()
 
-        # updates keywords based on existing keywords..
+        # updates keywords db table
         self._update_keywords(articles)
 
     def tfidf(self):
@@ -266,7 +274,7 @@ class LitWalk:
         # determine tokenizer to use
         tokenizer = None
 
-        # default token pattern, modifed to account for alternate minimum lengths
+        # default token pattern, modifed to account for minimum token lengths
         min_length = self._config['tokenization']['min_length']
         token_pattern = r"(?u)\b\w{" + str(min_length) + r",}\b"
 
@@ -463,16 +471,21 @@ class LitWalk:
 
         - [ ] add param to limit to last N days
         """
-        cursor = self.db.cursor()
+        print("(Not yet implemented..)")
 
-        sql = "SELECT stats.doi, stats.date, articleTopics.topic FROM stats INNER JOIN articleTopics ON stats.doi = articleTopics.doi;"
-        res = cursor.execute(sql)
-        rows = cursor.fetchall()[0]
+        # TODO (July 13, 2022)
+        #
+        # - [ ] when adding/updating articles, fill/update "articleTopics" table
+        # - [ ] when `walk` is called, update topic counts
+        #
 
-        breakpoint()
-        #  colnames = [x[0] for x in res.description]
-        #  article = dict(zip(colnames, article))
-        cursor.close()
+        #  cursor = self.db.cursor()
+        #
+        #  sql = "SELECT stats.doi, stats.date, articleTopics.topic FROM stats INNER JOIN articleTopics ON stats.doi = articleTopics.doi;"
+        #  res = cursor.execute(sql)
+        #  rows = cursor.fetchall()[0]
+        #
+        #  cursor.close()
 
     def walk(self, search):
         """Chooses an article at random"""
@@ -614,6 +627,8 @@ class LitWalk:
             self._logger.info(f"Adding {num_after} new articles..")
 
             self.add_articles(articles, cursor)
+        else:
+            self._logger.info(f"No new articles found..")
 
         cursor.close()
 
@@ -657,10 +672,10 @@ class LitWalk:
 
             self.add_article(cursor, tuple(entry.values()))
 
-        self._logger.info(f"Finished!")
-
         #  self._sync_articles = self.topics(articles)
         self._sync()
+
+        self._logger.info(f"Finished!")
 
     def add_article(self, cursor, article):
         sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal, keywords, pmc, pmid, title, abstract, author, file, volume, number, url, year)

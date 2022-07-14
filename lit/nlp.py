@@ -1,7 +1,5 @@
 """
 NLP-related functionality for lit-walk
-
-- [ ] check for availability of stanza "en" model and d/l if needed?
 """
 
 # stop words

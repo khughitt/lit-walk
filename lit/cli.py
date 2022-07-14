@@ -86,7 +86,7 @@ List of supported commands:
         valid_cmds = ['add', 'data', 'info', 'list', 'stats', 'walk']
 
         if args.command not in valid_cmds:
-            print(f"[ERROR] Unrecognized command specified: {args.command}!")
+            self._logger.error(f"Unrecognized command specified: {args.command}!")
             parser.print_help()
             sys.exit()
 
@@ -136,7 +136,7 @@ List of supported commands:
             raise Exception("Invalid input! Expecting a .bib file...")
 
         # import and add any new entries to db
-        print(f"Scanning {args.bibtex} for new entries...")
+        self._logger.info(f"Scanning {args.bibtex} for new entries...")
 
         self.lit.import_bibtex(args.bibtex, skip_check=args.skip_check)
 
