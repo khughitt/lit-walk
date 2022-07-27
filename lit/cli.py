@@ -86,7 +86,7 @@ List of supported commands:
         valid_cmds = ['add', 'data', 'info', 'list', 'stats', 'walk']
 
         if args.command not in valid_cmds:
-            self._logger.error(f"Unrecognized command specified: {args.command}!")
+            print(f"[Error] Unrecognized command specified: {args.command}!")
             parser.print_help()
             sys.exit()
 
