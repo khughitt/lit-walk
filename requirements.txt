@@ -1,3 +1,4 @@
+python>=3.9
 bibtexparser
 pandas
 pyyaml
@@ -5,3 +6,4 @@ rich
 scikit-learn
 matplotlib
 frictionless
+stanza
