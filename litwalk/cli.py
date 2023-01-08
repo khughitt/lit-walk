@@ -7,7 +7,7 @@ import sys
 import datetime
 import logging
 from argparse import ArgumentParser
-from lit.walk import LitWalk
+from litwalk.walk import LitWalk
 from rich import print
 from rich.padding import Padding
 from rich.table import Table
@@ -332,3 +332,8 @@ List of supported datatypes:
         # parse remaining parts of command args
         input_args = [x for x in sys.argv[1:] if x != "stats"]
         args, unknown = parser.parse_known_args(input_args)
+
+def run():
+    """Initialize and run CLI"""
+    from litwalk.cli import LitCLI
+    LitCLI()

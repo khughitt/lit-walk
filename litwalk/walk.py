@@ -3,7 +3,6 @@ LitWalk Class definition
 """
 import bibtexparser
 import datetime
-import frictionless
 import logging
 import os
 import pandas as pd
@@ -15,8 +14,7 @@ import sys
 import uuid
 import yaml
 from bibtexparser.bparser import BibTexParser
-from frictionless import Package, Resource
-from lit.nlp import STOP_WORDS, LemmaTokenizer
+from litwalk.nlp import STOP_WORDS, LemmaTokenizer
 from pkg_resources import resource_filename
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -747,6 +745,8 @@ class LitWalk:
             Number of clusters to detect; applies to cosine similiarity matrix step
             (default: 5)
         """
+        import frictionless
+
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, mode=0o755)
 

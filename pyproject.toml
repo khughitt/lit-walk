@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "lit-walk"
+version = "0.1.0"
+description = "Stochastic literature exploration"
+authors = ["Keith Hughitt <keith.hughitt@nih.gov>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "litwalk"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^1.5.2"
+PyYAML = "^6.0"
+rich = "^13.0.1"
+scikit-learn = "^1.2.0"
+matplotlib = "^3.6.2"
+bibtexparser = "^1.4.0"
+click = "^8.1.3"
+
+# waiting for 5.0 release to add
+#frictionless = "^5.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+lit-walk = "litwalk.cli:run"
