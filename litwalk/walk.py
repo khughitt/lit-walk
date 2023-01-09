@@ -1,7 +1,6 @@
 """
 LitWalk Class definition
 """
-import bibtexparser
 import datetime
 import logging
 import os
@@ -11,16 +10,24 @@ import re
 import shutil
 import sqlite3
 import sys
-import uuid
 import yaml
+from typing import Any, TypedDict
 from bibtexparser.bparser import BibTexParser
 from pkg_resources import resource_filename
 from rich import print
 
 __version__ = "0.3.0"
 
+class ArticleResult(TypedDict):
+    article: dict[str, Any]
+    num_included: int
+    num_total: int
+
 class LitWalk:
-    def __init__(self, config, verbose):
+    """
+    LitWalk class definition
+    """
+    def __init__(self, config:str, verbose:bool):
         """
         Initializes a new LitWalk instance.
 
@@ -70,8 +77,8 @@ class LitWalk:
         # connect to db
         try:
             self.db = sqlite3.connect(dbpath)
-        except sqlite3.Error as e:
-            print(e)
+        except sqlite3.Error as exception:
+            print(exception)
 
         cursor = self.db.cursor()
 
@@ -90,7 +97,7 @@ class LitWalk:
 
         cursor.close()
 
-    def _update_keywords(self, articles):
+    def _update_keywords(self, articles:list[dict[str, str]]):
         """
         Updates and extends keywords associated with each article using _existing_
         keywords as a guide..
@@ -100,11 +107,6 @@ class LitWalk:
 
         Next, the title/abstract of each article is scanned, and any detected keywords which are not
         already prese
-
-        TODO:
-        - [ ] detect new keywords in titles/abstracts?
-        - [ ] stem/lemmatize prior to matching
-        - [ ] decide on appropriate way to choose keywords to check against..
         """
         # get a list of keywords of interest
         target_keywords = self._get_target_keywords(articles)
@@ -137,11 +139,11 @@ class LitWalk:
 
         cursor.close()
 
-    def _get_target_keywords(self, articles):
+    def _get_target_keywords(self, articles:list[dict[str,str]]) -> list[str]:
         """
         Returns a list of keywords of sufficient length and frequency
         """
-        all_keywords = []
+        all_keywords:list[str] = []
 
         for article in articles:
             if article['keywords'] is not None:
@@ -162,7 +164,7 @@ class LitWalk:
 
         return keywords
 
-    def _create_articles_table(self, cursor):
+    def _create_articles_table(self, cursor:sqlite3.Cursor):
         """
         Creates articles table.
 
@@ -199,7 +201,7 @@ class LitWalk:
         except sqlite3.Error as e:
             print(e)
 
-    def _create_stats_table(self, cursor):
+    def _create_stats_table(self, cursor:sqlite3.Cursor):
         """
         Creates user stats table.
         """
@@ -217,7 +219,7 @@ class LitWalk:
         except sqlite3.Error as e:
             print(e)
 
-    def _create_article_topics_table(self, cursor):
+    def _create_article_topics_table(self, cursor:sqlite3.Cursor):
         """
         Creates a table mapping from article to topics
         """
@@ -247,7 +249,7 @@ class LitWalk:
         # updates keywords db table
         self._update_keywords(articles)
 
-    def get_keyword_df(self):
+    def get_keyword_df(self) -> pd.DataFrame:
         """Returns an <article, keyword> dataframe"""
         # get up-to-date article entries
         cursor = self.db.cursor()
@@ -273,7 +275,7 @@ class LitWalk:
         dois = []
 
         # convert keywords to list, and get list of all keywords
-        for i, article in enumerate(article_dicts):
+        for article in article_dicts:
             keywords = []
 
             if article['keywords'] is not None:
@@ -318,7 +320,7 @@ class LitWalk:
 
         return article_texts
 
-    def get_doi(self, cursor):
+    def get_doi(self, cursor:sqlite3.Cursor) -> list[str]:
         """
         Returns a list of existing DOIs in the database
         """
@@ -331,7 +333,7 @@ class LitWalk:
 
         return [x[0] for x in cursor.fetchall()]
 
-    def get_articles(self, n=None, missing_abstracts=False):
+    def get_articles(self, n=None, missing_abstracts=False) -> list[dict[str, Any]]:
         """Retrieves articles table"""
         cursor = self.db.cursor()
 
@@ -347,9 +349,12 @@ class LitWalk:
 
             # subset of articles
             if missing_abstracts:
-                sql = f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles WHERE abstract IS NULL ORDER BY RANDOM() LIMIT {n})"
+                sql = f"""SELECT * FROM articles WHERE id IN 
+                           (SELECT id FROM articles WHERE abstract IS NULL 
+                            ORDER BY RANDOM() LIMIT {n})"""
             else:
-                sql = f"SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY RANDOM() LIMIT {n})"
+                sql = f"""SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY
+                                                              RANDOM() LIMIT {n})"""
 
         res = cursor.execute(sql)
 
@@ -364,31 +369,8 @@ class LitWalk:
 
         return article_dicts
 
-    def stats(self):
-        """
-        Returns user stats
-
-        - [ ] add param to limit to last N days
-        """
-        print("(Not yet implemented..)")
-
-        # TODO (July 13, 2022)
-        #
-        # - [ ] when adding/updating articles, fill/update "articleTopics" table
-        # - [ ] when `walk` is called, update topic counts
-        #
-
-        #  cursor = self.db.cursor()
-        #
-        #  sql = "SELECT stats.doi, stats.date, articleTopics.topic FROM stats INNER JOIN articleTopics ON stats.doi = articleTopics.doi;"
-        #  res = cursor.execute(sql)
-        #  rows = cursor.fetchall()[0]
-        #
-        #  cursor.close()
-
-    def walk(self, search):
+    def walk(self, search=""):
         """Chooses an article at random"""
-
         # if no search constraints specified, choose from all articles
         if search == "":
             res = self.get_random()
@@ -400,7 +382,7 @@ class LitWalk:
 
         return res
 
-    def get_filtered(self, search):
+    def get_filtered(self, search="") -> ArticleResult:
         """
         Gets a single random article, limited to those matching some specified search
         phrase
@@ -424,7 +406,7 @@ class LitWalk:
 
         num_filtered = len(filtered)
 
-        res = {
+        res:ArticleResult = {
             "article": random.sample(filtered, 1)[0],
             "num_included": num_filtered,
             "num_total": num_articles
@@ -432,7 +414,7 @@ class LitWalk:
 
         return res
 
-    def get_random(self):
+    def get_random(self) -> ArticleResult:
         """
         Gets a single random article from among all articles
         """
@@ -451,7 +433,7 @@ class LitWalk:
         article = dict(zip(colnames, article))
         cursor.close()
 
-        res = {
+        res:ArticleResult = {
             "article": article,
             "num_included": num_articles,
             "num_total": num_articles
@@ -468,23 +450,16 @@ class LitWalk:
         self.db.commit()
         cursor.close()
 
-    def get_excluded_keywords(self):
+    def get_excluded_keywords(self) -> list[str]:
         """Returns a list of phrases to ignore when parsing/inferring keywords"""
         exclude = (self._config['keywords']['exclude'] +
-                   self._config['stopwords'] +
-                   STOP_WORDS)
+                   self._config['stopwords'])
 
         exclude = [x.lower() for x in exclude]
 
         return exclude
 
-    def get_stopwords(self):
-        """Returns a list of stopwords to exclude from analysis"""
-        stopwords = self._config['stopwords'] + STOP_WORDS
-
-        return [x.lower() for x in stopwords]
-
-    def import_bibtex(self, infile, skip_check=False):
+    def import_bibtex(self, infile:str, skip_check=False):
         """
         Imports and parses a bibtex reference file
         """
@@ -495,13 +470,13 @@ class LitWalk:
 
         with open(infile) as bibtex_file:
             parser = BibTexParser(common_strings = True)
-            bd = bibtexparser.load(bibtex_file, parser=parser)
+            bibtex = bibtexparser.load(bibtex_file, parser=parser)
 
         # for now, exclude any entries with no associated DOI..
-        articles = [x for x in bd.entries if "doi" in x]
+        articles = [x for x in bibtex.entries if "doi" in x]
 
-        if len(articles) < len(bd.entries):
-            num_missing = len(bd.entries) - len(articles)
+        if len(articles) < len(bibtex.entries):
+            num_missing = len(bibtex.entries) - len(articles)
             self._logger.warn(f"Excluding {num_missing} articles with no associated DOI")
 
         cursor = self.db.cursor()
@@ -516,25 +491,31 @@ class LitWalk:
 
             if num_before != num_after:
                 num_removed = num_before - num_after
-                self._logger.warn(f"Excluding {num_removed} articles already present in collection")
+                self._logger.warn("Excluding %s articles already present in collection", num_removed)
         else:
             num_after = len(articles)
 
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
         if num_after > 0:
-            self._logger.info(f"Adding {num_after} new articles..")
+            self._logger.info("Adding %s new articles..", num_after)
 
             self.add_articles(articles, cursor)
         else:
-            self._logger.info(f"No new articles found..")
+            self._logger.info("No new articles found..")
 
         cursor.close()
 
-    def add_articles(self, articles, cursor):
-        """Adds one or more articles to the users collection"""
-        excluded_keywords = self.get_excluded_keywords()
+    def add_articles(self, articles:list[dict[str, str]], cursor:sqlite3.Cursor):
+        """
+        Adds one or more articles to the users collection
 
+        articles: list[dict]
+            List of article dicts as returned from sqlite query
+        cursor: sqlite3.Cursor
+            sqlite3 db cursor
+        """
+        excluded_keywords = self.get_excluded_keywords()
 
         fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
                   "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
@@ -571,14 +552,14 @@ class LitWalk:
 
             self.add_article(cursor, tuple(entry.values()))
 
-        #  self._sync_articles = self.topics(articles)
         self._sync()
 
         self._logger.info(f"Finished!")
 
-    def add_article(self, cursor, article):
+    def add_article(self, cursor:sqlite3.Cursor, article:tuple[str]):
         """
         Adds a single article to a user's collection
+
         """
         sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal, 
                                       keywords, pmc, pmid, title, abstract, author, file, volume, 
@@ -638,7 +619,7 @@ class LitWalk:
 
         return num_articles
 
-    def _load_config(self, config):
+    def _load_config(self, config:str):
         """
         Loads user config / creates one if none exists
         """
@@ -654,7 +635,7 @@ class LitWalk:
         # apply any arguments passed in
         #self._config.update(kwargs)
 
-    def _create_config(self, config_file):
+    def _create_config(self, config_file:str):
         """
         Generates a default config file
         """

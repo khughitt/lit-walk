@@ -51,8 +51,6 @@ def cli(ctx, config:str, verbose:bool):
 
     logger.info("Initializing lit-walk...")
 
-    #config = os.path.join(conf_dir, "config.yml")
-
     # initialize lit
     ctx.obj = LitWalk(config, verbose)
 
@@ -75,7 +73,7 @@ def add(litwalk, target, skip_check):
         if not os.path.exists(target):
             raise Exception("No Bibtex file found at specified path!")
 
-        logger.info("Scanning %s for new entries...", target)
+        print(f"Scanning {target} for new entries...")
         litwalk.import_bibtex(target, skip_check=skip_check)
 
     # TODO: add single article by DOI
