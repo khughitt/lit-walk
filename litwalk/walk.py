@@ -14,16 +14,10 @@ import sys
 import uuid
 import yaml
 from bibtexparser.bparser import BibTexParser
-from litwalk.nlp import STOP_WORDS, LemmaTokenizer
 from pkg_resources import resource_filename
-from sklearn.decomposition import PCA
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.manifold import TSNE
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.cluster import SpectralClustering
 from rich import print
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 class LitWalk:
     def __init__(self, config, verbose):
@@ -48,11 +42,13 @@ class LitWalk:
         self._init_db()
 
     def _setup_logger(self):
-        """Sets up logger to print messages to STDOUT"""
+        """
+        Sets up logger to print messages to STDOUT
+        """
         logging.basicConfig(stream=sys.stdout,
                             format='[%(levelname)s] %(message)s')
 
-        self._logger = logging.getLogger('lit')
+        self._logger = logging.getLogger('lit-walk')
 
         if self.verbose:
             self._logger.setLevel(logging.DEBUG)
@@ -94,14 +90,6 @@ class LitWalk:
 
         cursor.close()
 
-    #  def detect_keywords(self, articles):
-    #      """
-    #      Detects & quantifies potential keywords using article titles/abstracts
-    #
-    #      Limitation: restricted to single word keywords?..
-    #      """
-    #      pass
-
     def _update_keywords(self, articles):
         """
         Updates and extends keywords associated with each article using _existing_
@@ -110,7 +98,8 @@ class LitWalk:
         First, a list of all keywords associated with at least one article is
         inferred.
 
-        Next, the title/abstract of each article is scanned, and any detected keywords which are not already prese
+        Next, the title/abstract of each article is scanned, and any detected keywords which are not
+        already prese
 
         TODO:
         - [ ] detect new keywords in titles/abstracts?
@@ -134,14 +123,14 @@ class LitWalk:
                         article['abstract'].lower())):
                     keywords.append(keyword)
 
-            keywords_str = "; ".join(sorted(list(set(keywords))));
+            keywords_str = "; ".join(sorted(list(set(keywords))))
 
             if keywords_str != article['keywords']:
                 #  self._logger.info(f"Adding {len(keywords)} new keywords..")
-                self._logger.info(f"Updating keywords for {article['doi']}")
+                self._logger.info("Updating keywords for %s", article['doi'])
 
                 # update db
-                res = cursor.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
+                _ = cursor.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
                                     (keywords_str, article["doi"]))
 
         self.db.commit()
@@ -257,94 +246,6 @@ class LitWalk:
 
         # updates keywords db table
         self._update_keywords(articles)
-
-    def tfidf(self):
-        """
-        Generates article TF-IDF matrix using titles + abstracts
-
-        At present, articles with missing abstracts are excluded from the analysis.
-        """
-        texts = self.get_article_texts(exclude_missing=True)
-
-        # list of stopwords to exclude
-        stopwords = self.get_stopwords()
-
-        # determine tokenizer to use
-        tokenizer = None
-
-        # default token pattern, modifed to account for minimum token lengths
-        min_length = self._config['tokenization']['min_length']
-        token_pattern = r"(?u)\b\w{" + str(min_length) + r",}\b"
-
-        # get lemmatization tokenizer, if enabled
-        if self._config['tokenization']['lemmatize']:
-            tokenizer = LemmaTokenizer(stopwords,
-                                       self._logger,
-                                       self._config['tokenization']['min_length'],
-                                       self.verbose)
-        else:
-            tokenizer = None
-
-        # generate TF-IDF matrix
-        tfidf_vectorizer = TfidfVectorizer(max_df=self._config['tfidf']['max_df'],
-                                           min_df=self._config['tfidf']['min_df'],
-                                           max_features=self._config['tfidf']['max_features'],
-                                           stop_words=stopwords,
-                                           token_pattern=token_pattern,
-                                           tokenizer=tokenizer)
-
-        tfidf = tfidf_vectorizer.fit_transform(texts.values())
-
-        # convert sparse mat to dataframe
-        df = pd.DataFrame(tfidf.todense(),
-                          columns=tfidf_vectorizer.get_feature_names_out(),
-                          index=texts.keys())
-
-        # fix stanza's handling of "bayesian", if present.. (jan 2022)
-        df = df.rename({'Jayesian': 'bayesian'}, axis=1)
-
-        return df
-
-    def similarity(self, tfidf):
-        """
-        Computes an article similarity matrix
-
-        At present, uses cosine similarity of a TF-IDF transformed <article x word> matrix
-        """
-        sim_mat = pd.DataFrame(cosine_similarity(tfidf),
-                               index=tfidf.index, columns=tfidf.index)
-
-        return sim_mat
-
-    def pca(self, sim_mat):
-        """
-        Article PCA projection
-        """
-        pca = PCA(n_components=2, whiten=False, random_state=1)
-        pca = pca.fit(sim_mat.to_numpy())
-
-        # % variance explained
-        pc_vars = pca.explained_variance_ratio_
-
-        self._logger.info(f"PCA Variance explained:")
-        self._logger.info(f" PC1 {pc_vars[0]:.3f}")
-        self._logger.info(f" PC2 {pc_vars[1]:.3f}")
-
-        pca_df = pd.DataFrame(pca.transform(sim_mat.to_numpy()), index=sim_mat.index,
-                              columns=['PC1', 'PC2'])
-
-        return pca_df
-
-    def tsne(self, sim_mat, perplexity=30.0):
-        """
-        Article t-SNE projection
-        """
-        tsne = TSNE(n_components=2, perplexity=perplexity, metric='euclidean',
-                        learning_rate='auto', init='random').fit_transform(sim_mat)
-
-        tsne_dat = pd.DataFrame(tsne, columns=['TSNE1', 'TSNE2'], index=sim_mat.index)
-
-        return tsne_dat
 
     def get_keyword_df(self):
         """Returns an <article, keyword> dataframe"""
@@ -676,7 +577,12 @@ class LitWalk:
         self._logger.info(f"Finished!")
 
     def add_article(self, cursor, article):
-        sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal, keywords, pmc, pmid, title, abstract, author, file, volume, number, url, year)
+        """
+        Adds a single article to a user's collection
+        """
+        sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal, 
+                                      keywords, pmc, pmid, title, abstract, author, file, volume, 
+                                      number, url, year)
                     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
         cursor.execute(sql, article)
 
@@ -715,7 +621,9 @@ class LitWalk:
         }
 
     def num_articles(self):
-        """Returns the number of articles present in the user's collection"""
+        """
+        Returns the number of articles present in the user's collection
+        """
         cursor = self.db.cursor()
 
         sql = "SELECT COUNT(id) FROM articles;"
@@ -730,122 +638,17 @@ class LitWalk:
 
         return num_articles
 
-    def create_pkg(self, data_type, output_dir, num_clusters=5):
-        """
-        Returns a data package for one of several specified types.
-
-        Parameters
-        ----------
-        data_type: str
-            Which data type to construct a data package for. Currently supported:
-            [tfidf|cosine|pca|tsne]
-        output_dir: str
-            Location to write generate data package to (default: current directory)
-        num_clusters: int
-            Number of clusters to detect; applies to cosine similiarity matrix step
-            (default: 5)
-        """
-        import frictionless
-
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir, mode=0o755)
-
-        # generate TF-IDF transformed word matrix; currently used as the basis for all
-        # other data types
-        tfidf = self.tfidf()
-
-        # save tfidf to disk and add to resource list
-        outfile = os.path.join(output_dir, "tfidf.tsv")
-        tfidf.reset_index().rename(columns={tfidf.index.name: 'doi'}).to_csv(outfile, sep='\t', index=False)
-
-        resource_filenames = ['tfidf.tsv']
-
-        if data_type == "tfidf":
-            title = 'lit-walk Article TF-IDF matrix'
-            desc = 'TF-IDF matrix generated from the titles and abstracts of articles in a users collection.'
-        else:
-            # generate article similarity matrix from TF-IDF matrix
-            sim_mat = self.similarity(tfidf)
-
-            outfile = os.path.join(output_dir, "sim_mat.tsv")
-            sim_mat.reset_index().rename(columns={sim_mat.index.name: 'doi'}).to_csv(outfile, sep='\t', index=False)
-            resource_filenames.append("sim_mat.tsv")
-
-            # cluster article cosine similarities
-            sc = SpectralClustering(num_clusters, eigen_solver='arpack',
-                                    affinity='precomputed', n_init=100,
-                                    assign_labels='discretize')
-            clusters = sc.fit_predict(sim_mat)  
-
-            # create article metadata table and add cluster assignments
-            articles = self.get_articles()
-
-            doi_titles = {x['doi']: x['title'] for x in articles}
-            mdata_titles = [doi_titles[doi] for doi in sim_mat.index]
-
-            mdata = pd.DataFrame({
-                "doi": sim_mat.index, 
-                "title": mdata_titles,
-                "cluster": clusters
-            })
-
-            outfile = os.path.join(output_dir, "articles.tsv")
-            mdata.to_csv(outfile, sep='\t', index=False)
-            resource_filenames.append("articles.tsv")
-
-            if data_type == "cosine":
-                title = 'lit-walk article cosine similarity matrix'
-                desc = 'cosine similarity matrix generated from a tf-idf representation of the users articles'
-            elif data_type == "pca":
-                pca = self.pca(sim_mat)
-                title = 'lit-walk article cosine similarity matrix PCA projection'
-                desc = 'PCA-projected article similarity'
-
-                outfile = os.path.join(output_dir, "pca.tsv")
-                pca.reset_index().rename(columns={pca.index.name: 'doi'}).to_csv(outfile, sep='\t', index=False)
-
-                resource_filenames.append("pca.tsv")
-            elif data_type == "tsne":
-                tsne = self.tsne(sim_mat)
-                title = 'lit-walk article cosine similarity matrix t-SNE projection'
-                desc = 't-SNE projected article similarity'
-
-                outfile = os.path.join(output_dir, "tsne.tsv")
-                tsne.reset_index().rename(columns={tsne.index.name: 'doi'}).to_csv(outfile, sep='\t', index=False)
-
-                resource_filenames.append("tsne.tsv")
-            else:
-                raise Exception(f"Unsupported data type specified: {data_type}")
-
-        # create data package
-        now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f%z')
-
-        pkg = frictionless.Package(
-            id = str(uuid.uuid4()),
-            name=data_type,
-            title=title,
-            description=desc,
-            version=__version__,
-            created=now
-        )
-
-        # add resources to package
-        for filename in resource_filenames:
-            resource = frictionless.describe_resource(filename, basepath=output_dir)
-            pkg.add_resource(resource)
-
-        # write datapackage.yml
-        pkg.to_yaml(os.path.join(output_dir, "datapackage.yml"))
-
     def _load_config(self, config):
-        """Loads user config / creates one if none exists"""
+        """
+        Loads user config / creates one if none exists
+        """
         infile = os.path.expanduser(config)
 
         if not os.path.exists(infile):
-            self._logger.info(f"Generating a new configuration at {infile}...")
+            self._logger.info("Generating a new configuration at %s...", infile)
             self._create_config(infile)
 
-        with open(infile) as fp:
+        with open(infile, "rt", encoding="utf-8") as fp:
             self._config = yaml.load(fp, Loader=yaml.FullLoader)
 
         # apply any arguments passed in
