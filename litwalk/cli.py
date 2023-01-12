@@ -40,7 +40,7 @@ print("[cyan]========================================[/cyan]")
 
 @click.group()
 @click.option("--config", default=default_conf, help="Path to lit-walk config file to use")
-@click.option("--verbose", default=False, help="If enabled, prints verbose output")
+@click.option("--verbose", is_flag=True, help="If enabled, prints verbose output")
 @click.pass_context
 def cli(ctx, config:str, verbose:bool):
     """Initialize CLI"""

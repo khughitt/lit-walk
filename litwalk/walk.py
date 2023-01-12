@@ -11,6 +11,7 @@ import shutil
 import sqlite3
 import sys
 import yaml
+import bibtexparser
 from typing import Any, TypedDict
 from bibtexparser.bparser import BibTexParser
 from pkg_resources import resource_filename
@@ -97,72 +98,6 @@ class LitWalk:
 
         cursor.close()
 
-    def _update_keywords(self, articles:list[dict[str, str]]):
-        """
-        Updates and extends keywords associated with each article using _existing_
-        keywords as a guide..
-
-        First, a list of all keywords associated with at least one article is
-        inferred.
-
-        Next, the title/abstract of each article is scanned, and any detected keywords which are not
-        already prese
-        """
-        # get a list of keywords of interest
-        target_keywords = self._get_target_keywords(articles)
-
-        cursor = self.db.cursor()
-
-        for article in articles:
-            if article['keywords'] is None:
-                keywords = []
-            else:
-                keywords = article['keywords'].split("; ")
-
-            for keyword in target_keywords:
-                if (keyword in article['title'].lower() or
-                    (article['abstract'] is not None and keyword in
-                        article['abstract'].lower())):
-                    keywords.append(keyword)
-
-            keywords_str = "; ".join(sorted(list(set(keywords))))
-
-            if keywords_str != article['keywords']:
-                #  self._logger.info(f"Adding {len(keywords)} new keywords..")
-                self._logger.info("Updating keywords for %s", article['doi'])
-
-                # update db
-                _ = cursor.execute("UPDATE articles SET keywords = ? WHERE doi = ?;",
-                                    (keywords_str, article["doi"]))
-
-        self.db.commit()
-
-        cursor.close()
-
-    def _get_target_keywords(self, articles:list[dict[str,str]]) -> list[str]:
-        """
-        Returns a list of keywords of sufficient length and frequency
-        """
-        all_keywords:list[str] = []
-
-        for article in articles:
-            if article['keywords'] is not None:
-                keywords = [x.strip() for x in article['keywords'].split(";")]
-
-                all_keywords = all_keywords + keywords
-
-        # for articles with missing keywords, check for common keywords in the
-        # title/abstract
-        keyword_counts = pd.Series(all_keywords).value_counts()
-
-        # for now, exclude keywords which only appear a small number of times
-        min_freq = self._config['keywords']['min_freq']
-        min_size = self._config['keywords']['min_size']
-
-        keywords = keyword_counts[keyword_counts >= min_freq].index
-        keywords = sorted([x for x in keywords if len(x) >= min_size])
-
-        return keywords
 
     def _create_articles_table(self, cursor:sqlite3.Cursor):
         """
@@ -237,63 +172,6 @@ class LitWalk:
         except sqlite3.Error as e:
             print(e)
 
-    def _sync(self):
-        """
-        1. extends article keywords
-        2. creates <article x topic> mat?
-        """
-        self._logger.info("Synchronizing articles db..")
-
-        articles = self.get_articles()
-
-        # updates keywords db table
-        self._update_keywords(articles)
-
-    def get_keyword_df(self) -> pd.DataFrame:
-        """Returns an <article, keyword> dataframe"""
-        # get up-to-date article entries
-        cursor = self.db.cursor()
-
-        sql = "SELECT doi, keywords FROM articles ORDER BY doi"
-
-        if self._config['dev_mode']['enabled']:
-            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
-
-        res = cursor.execute(sql)
-        articles = cursor.fetchall()
-
-        # convert to list of dicts
-        article_dicts = []
-
-        for article in articles:
-            article_dicts.append({"doi": article[0], "keywords": article[1]})
-
-        target_keywords = pd.Series(self._get_target_keywords(article_dicts))
-
-        # use a list of rows to build matrix
-        rows = []
-        dois = []
-
-        # convert keywords to list, and get list of all keywords
-        for article in article_dicts:
-            keywords = []
-
-            if article['keywords'] is not None:
-                keywords = [x.strip() for x in article['keywords'].split('; ')]
-
-            dois.append(article['doi'])
-            rows.append(target_keywords.isin(keywords))
-
-        # combine rows into dataframe
-        dat = pd.DataFrame.from_records(rows)
-        dat.columns = target_keywords
-        dat.index = dois
-
-        # convert to ndarray and return
-        dat.replace({False: 0, True: 1}, inplace=True)
-
-        return dat
-
     def get_article_texts(self, exclude_missing=True):
         """
         Returns a dict mapping from article DOIs to concatenated titles + abstracts.
@@ -349,8 +227,8 @@ class LitWalk:
 
             # subset of articles
             if missing_abstracts:
-                sql = f"""SELECT * FROM articles WHERE id IN 
-                           (SELECT id FROM articles WHERE abstract IS NULL 
+                sql = f"""SELECT * FROM articles WHERE id IN
+                           (SELECT id FROM articles WHERE abstract IS NULL
                             ORDER BY RANDOM() LIMIT {n})"""
             else:
                 sql = f"""SELECT * FROM articles WHERE id IN (SELECT id FROM articles ORDER BY
@@ -450,15 +328,6 @@ class LitWalk:
         self.db.commit()
         cursor.close()
 
-    def get_excluded_keywords(self) -> list[str]:
-        """Returns a list of phrases to ignore when parsing/inferring keywords"""
-        exclude = (self._config['keywords']['exclude'] +
-                   self._config['stopwords'])
-
-        exclude = [x.lower() for x in exclude]
-
-        return exclude
-
     def import_bibtex(self, infile:str, skip_check=False):
         """
         Imports and parses a bibtex reference file
@@ -515,8 +384,6 @@ class LitWalk:
         cursor: sqlite3.Cursor
             sqlite3 db cursor
         """
-        excluded_keywords = self.get_excluded_keywords()
-
         fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
                   "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
                   "volume", "number", "url", "year"]
@@ -530,7 +397,7 @@ class LitWalk:
             # strip newlines from title, abstract, keywords, etc.
             for field in ['title', 'abstract', 'author', 'keywords']:
                 if entry[field] is not None:
-                    entry[field] = entry[field].replace("\n", " ");
+                    entry[field] = entry[field].replace("\n", " ")
 
             # extract keywords;
             if entry['keywords'] is not None:
@@ -541,28 +408,24 @@ class LitWalk:
                     # in article abstracts, etc.)
                     keyword = keyword.strip().lower()
 
-                    # exclude keywords that either:
-                    # 1. match phrases in stop words list, or,
-                    # 2. contain a "/", possibly corresponding to a path in
-                    #    paperpile (this can be made optional, in the future..)
-                    if keyword not in excluded_keywords and not "/" in keyword:
+                    # exclude keywords that contain a "/", possibly corresponding to a path in
+                    # paperpile (this can be made optional, in the future..)
+                    if "/" not in keyword:
                         keywords.append(keyword)
 
                 entry['keywords'] = "; ".join(keywords)
 
             self.add_article(cursor, tuple(entry.values()))
 
-        self._sync()
-
-        self._logger.info(f"Finished!")
+        self._logger.info("Finished!")
 
     def add_article(self, cursor:sqlite3.Cursor, article:tuple[str]):
         """
         Adds a single article to a user's collection
 
         """
-        sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal, 
-                                      keywords, pmc, pmid, title, abstract, author, file, volume, 
+        sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal,
+                                      keywords, pmc, pmid, title, abstract, author, file, volume,
                                       number, url, year)
                     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
         cursor.execute(sql, article)
