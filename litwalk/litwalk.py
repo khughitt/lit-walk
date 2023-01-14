@@ -56,11 +56,19 @@ class LitWalk:
         # load config
         self._load_config(config)
 
+        # create data and notes directories, if needed
+        if not os.path.exists(self._config['data_dir']):
+            os.makedirs(os.path.expanduser(self._config['data_dir']), mode=0o755)
+
+        if not os.path.exists(self._config['notes_dir']):
+            os.makedirs(os.path.expanduser(self._config['notes_dir']), mode=0o755)
+
         # initialize database
         self._init_db()
 
-        # initialize notes manager
-        self._notes = NotesManager(self._config["notes_dir"])
+    def get_notes_dir(self) -> str:
+        """Returns path to base user notes directory"""
+        return self._config["notes_dir"]
 
     def _setup_logger(self):
         """
@@ -84,9 +92,6 @@ class LitWalk:
         """
         dbpath = os.path.join(self._config['data_dir'], 'db.sqlite')
         dbpath = os.path.realpath(os.path.expanduser(os.path.expandvars(dbpath)))
-
-        if not os.path.exists(self._config['data_dir']):
-            os.makedirs(os.path.expanduser(self._config['data_dir']), mode=0o755)
 
         # connect to db
         try:
@@ -131,6 +136,7 @@ class LitWalk:
             arxivid text,
             title text NOT NULL,
             abstract text,
+            note text,
             booktitle text,
             edition text,
             entrytype text,

@@ -98,7 +98,7 @@ def info(litwalk):
 def notes(litwalk):
     """Take notes on an article"""
     articles = litwalk.get_articles()
-    view = NotesView(articles)
+    view = NotesView(articles, litwalk.get_notes_dir())
     view.run()
 
 @cli.command
