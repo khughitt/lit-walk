@@ -57,9 +57,8 @@ def cli(ctx, config:str, verbose:bool):
 
 @cli.command
 @click.argument("target", type=str)
-@click.option("--skip-check", help="If enabled, skips check for existing articles", default=False)
 @click.pass_obj
-def add(litwalk, target, skip_check):
+def add(litwalk, target):
     """
     Add a .bib file or DOI
     """
@@ -75,7 +74,7 @@ def add(litwalk, target, skip_check):
             raise Exception("No Bibtex file found at specified path!")
 
         print(f"Scanning {target} for new entries...")
-        litwalk.import_bibtex(target, skip_check=skip_check)
+        litwalk.import_bibtex(target)
 
     # TODO: add single article by DOI
     elif doi_regex.match(target):

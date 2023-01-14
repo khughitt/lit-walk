@@ -2,6 +2,7 @@
 LitWalk Class definition
 """
 import datetime
+import hashlib
 import logging
 import os
 import pandas as pd
@@ -25,6 +26,14 @@ class ArticleResult(TypedDict):
     num_included: int
     num_total: int
 
+# activity codes
+ACTIVITY_ADD = 0
+ACTIVITY_VIEW = 1
+ACTIVITY_MODIFY = 2
+ACTIVITY_REMOVE = 3
+ACTIVITY_NOTE = 4
+ACTIVITY_WALK = 5
+
 class LitWalk:
     """
     LitWalk class definition
@@ -47,7 +56,7 @@ class LitWalk:
         # load config
         self._load_config(config)
 
-        # load articles / stats databases
+        # initialize database
         self._init_db()
 
         # initialize notes manager
@@ -69,7 +78,7 @@ class LitWalk:
 
     def _init_db(self):
         """
-        Initializes database with user articles/stats.
+        Initializes database
 
         If the database does not already exist, it will be created.
         """
@@ -97,8 +106,11 @@ class LitWalk:
         if "activity" not in tables:
             self._create_activity_table(cursor)
 
-        if "articleTopics" not in tables:
-            self._create_article_topics_table(cursor)
+        if "annotations" not in tables:
+            self._create_annot_table(cursor)
+
+        if "articleAnnot" not in tables:
+            self._create_article_annot_table(cursor)
 
         cursor.close()
 
@@ -130,7 +142,8 @@ class LitWalk:
             number text,
             url text,
             year integer,
-            month integer
+            month integer,
+            md5 text
         );
         """
         self._logger.info("Creating articles table...")
@@ -143,83 +156,67 @@ class LitWalk:
     def _create_activity_table(self, cursor:sqlite3.Cursor):
         """
         Creates activity table.
-
-        ACTIONS
-
-        0 add
-        1 view
-        2 modify
-        3 remove
-        4 note
         """
         sql = """
         CREATE TABLE IF NOT EXISTS activity (
             id integer PRIMARY KEY,
+            entity_id INT,
             date timestamp,
             action integer DEFAULT 0
         );
         """
-        self._logger.info("Creating stats table...")
+        self._logger.info("Creating activity table...")
 
         try:
             cursor.execute(sql)
         except sqlite3.Error as e:
             print(e)
 
-    def _create_article_topics_table(self, cursor:sqlite3.Cursor):
+    def _create_annot_table(self, cursor:sqlite3.Cursor):
+        """
+        Creates annotation table.
+        """
+        sql = """
+        CREATE TABLE IF NOT EXISTS annotations (
+            id integer PRIMARY KEY,
+            title text,
+            note text,
+            description text,
+            source text
+        );
+        """
+        self._logger.info("Creating annotations table...")
+
+        try:
+            cursor.execute(sql)
+        except sqlite3.Error as e:
+            print(e)
+
+    def _create_article_annot_table(self, cursor:sqlite3.Cursor):
         """
         Creates a table mapping from article to topics
         """
         sql = """
-        CREATE TABLE IF NOT EXISTS articleTopics (
+        CREATE TABLE IF NOT EXISTS articleAnnot (
             id integer PRIMARY KEY,
-            doi text,
-            topic text
+            article_id integer NOT NULL,
+            annot_id integer NOT NULL,
+            start integer,
+            end integer
         );
         """
-        self._logger.info("Creating article-topics table...")
+        self._logger.info("Creating articleAnnot table...")
 
         try:
             cursor.execute(sql)
         except sqlite3.Error as e:
             print(e)
 
-    def get_article_texts(self, exclude_missing=True):
+    def get_md5s(self, cursor:sqlite3.Cursor) -> list[str]:
         """
-        Returns a dict mapping from article DOIs to concatenated titles + abstracts.
+        Returns a list of existing md5sums in the database
         """
-        # get article titles + abstracts
-        cursor = self.db.cursor()
-
-        sql = "SELECT doi, title, abstract FROM articles ORDER BY doi"
-
-        if self._config['dev_mode']['enabled']:
-            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
-
-        res = cursor.execute(sql)
-        articles = cursor.fetchall()
-
-        article_texts = {}
-
-        for article in articles:
-            # if enabled, skip articles with missing abstracts
-            if exclude_missing and article[2] is None:
-                continue
-
-            article_texts[article[0]] = article[1] + article[2]
-
-        return article_texts
-
-    def get_doi(self, cursor:sqlite3.Cursor) -> list[str]:
-        """
-        Returns a list of existing DOIs in the database
-        """
-        sql = "SELECT doi FROM articles"
-
-        if self._config['dev_mode']['enabled']:
-            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
-
-        cursor.execute(sql)
+        cursor.execute("SELECT md5 FROM articles")
 
         return [x[0] for x in cursor.fetchall()]
 
@@ -276,8 +273,8 @@ class LitWalk:
         else:
             res = self.get_filtered(search)
 
-        # update stats; for now, assume article was read (later: prompt user..)
-        self.update_stats(res['article']["doi"])
+        # update activity
+        self.update_activity(res['article']["id"], ACTIVITY_WALK)
 
         return res
 
@@ -340,16 +337,18 @@ class LitWalk:
 
         return res
 
-    def update_stats(self, doi):
-        """Add entry to stats table"""
+    def update_activity(self, entity_id, action=ACTIVITY_ADD):
+        """
+        Add entry to activity table
+        """
         cursor = self.db.cursor()
 
-        res = cursor.execute("INSERT INTO stats(doi, date) VALUES (?, ?);",
-                          (doi, datetime.datetime.now()))
+        res = cursor.execute("INSERT INTO activity(entity_id, date, action) VALUES (?, ?, ?);",
+                             (entity_id, datetime.datetime.now(), action))
         self.db.commit()
         cursor.close()
 
-    def import_bibtex(self, infile:str, skip_check=False):
+    def import_bibtex(self, infile:str):
         """
         Imports and parses a bibtex reference file
         """
@@ -362,28 +361,41 @@ class LitWalk:
             parser = BibTexParser(common_strings = True)
             bibtex = bibtexparser.load(bibtex_file, parser=parser)
 
-        # for now, exclude any entries with no associated DOI..
-        articles = [x for x in bibtex.entries if "doi" in x]
+        articles = bibtex.entries
 
-        if len(articles) < len(bibtex.entries):
-            num_missing = len(bibtex.entries) - len(articles)
-            self._logger.warn(f"Excluding {num_missing} articles with no associated DOI")
+        # skip any entries which are missing both title & abstract
+        num_before = len(articles)
 
+        self._logger.info(f"Checking {num_before} entries..")
+
+        articles = [x for x in articles if "title" in x or "abstract" in x]
+
+        num_after = len(articles)
+
+        if num_before != num_after:
+            num_removed = num_before - num_after
+            self._logger.warn("Excluding %s articles missing both title & abstract fields", 
+                              num_removed)
+
+        # compute md5 hash for each article title + abstract
+        for article in articles:
+            title = article.get("title", "")
+            abstract = article.get("abstract", "")
+
+            hash_input = (title + abstract).encode("utf-8")
+            article['md5'] = hashlib.md5(hash_input).hexdigest()
+
+        # exclude articles already present in the db
         cursor = self.db.cursor()
+        existing_md5s = self.get_md5s(cursor)
 
-        # exclude existing articles
-        if not skip_check:
-            existing_dois = self.get_doi(cursor)
+        num_before = len(articles)
+        articles = [x for x in articles if x['md5'] not in existing_md5s]
+        num_after = len(articles)
 
-            num_before = len(articles)
-            articles = [x for x in articles if x['doi'] not in existing_dois]
-            num_after = len(articles)
-
-            if num_before != num_after:
-                num_removed = num_before - num_after
-                self._logger.warn("Excluding %s articles already present in collection", num_removed)
-        else:
-            num_after = len(articles)
+        if num_before != num_after:
+            num_removed = num_before - num_after
+            self._logger.warn("Excluding %s articles already present in collection", num_removed)
 
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
@@ -405,9 +417,9 @@ class LitWalk:
         cursor: sqlite3.Cursor
             sqlite3 db cursor
         """
-        fields = ["doi", "booktitle", "edition", "entrytype", "isbn", "issn", "journal",
-                  "keywords", "pmc", "pmid", "title", "abstract", "author", "file",
-                  "volume", "number", "url", "year"]
+        fields = ["doi", "isbn", "issn", "pmc", "pmid", "arxivid", "title", "abstract", "booktitle",
+                  "edition", "entrytype", "journal", "keywords", "pages", "author", "volume",
+                  "number", "url", "year", "month", "md5"]
 
         for article in articles:
             entry = {k: None for k in fields}
@@ -443,12 +455,11 @@ class LitWalk:
     def add_article(self, cursor:sqlite3.Cursor, article:tuple[str]):
         """
         Adds a single article to a user's collection
-
         """
-        sql = '''INSERT INTO articles(doi, booktitle, edition, entrytype, isbn, issn, journal,
-                                      keywords, pmc, pmid, title, abstract, author, file, volume,
-                                      number, url, year)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+        sql = '''INSERT INTO articles(doi, isbn, issn, pmc, pmid, arxivid, title, abstract,
+                                      booktitle, edition, entrytype, journal, keywords, pages,
+                                      author, volume, number, url, year, month, md5)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
         cursor.execute(sql, article)
 
         self.db.commit()
