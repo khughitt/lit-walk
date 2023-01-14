@@ -16,6 +16,7 @@ from typing import Any, TypedDict
 from bibtexparser.bparser import BibTexParser
 from pkg_resources import resource_filename
 from rich import print
+from . notesmanager import NotesManager
 
 __version__ = "0.3.0"
 
@@ -48,6 +49,9 @@ class LitWalk:
 
         # load articles / stats databases
         self._init_db()
+
+        # initialize notes manager
+        self._notes = NotesManager(self._config["notes_dir"])
 
     def _setup_logger(self):
         """
@@ -90,14 +94,13 @@ class LitWalk:
         if "articles" not in tables:
             self._create_articles_table(cursor)
 
-        if "stats" not in tables:
-            self._create_stats_table(cursor)
+        if "activity" not in tables:
+            self._create_activity_table(cursor)
 
         if "articleTopics" not in tables:
             self._create_article_topics_table(cursor)
 
         cursor.close()
-
 
     def _create_articles_table(self, cursor:sqlite3.Cursor):
         """
@@ -108,25 +111,26 @@ class LitWalk:
         sql = """
         CREATE TABLE IF NOT EXISTS articles (
             id integer PRIMARY KEY,
-            doi text NOT NULL,
+            doi text,
+            isbn text,
+            issn text,
+            pmc text,
+            pmid integer,
+            arxivid text,
+            title text NOT NULL,
+            abstract text,
             booktitle text,
             edition text,
             entrytype text,
-            isbn text,
-            issn text,
             journal text,
             keywords text,
-            pmc text,
-            pmid integer,
-            title text NOT NULL,
-            abstract text,
+            pages text,
             author text,
-            file text,
             volume text,
             number text,
             url text,
             year integer,
-            times_read integer DEFAULT 0 NOT NULL
+            month integer
         );
         """
         self._logger.info("Creating articles table...")
@@ -136,15 +140,23 @@ class LitWalk:
         except sqlite3.Error as e:
             print(e)
 
-    def _create_stats_table(self, cursor:sqlite3.Cursor):
+    def _create_activity_table(self, cursor:sqlite3.Cursor):
         """
-        Creates user stats table.
+        Creates activity table.
+
+        ACTIONS
+
+        0 add
+        1 view
+        2 modify
+        3 remove
+        4 note
         """
         sql = """
-        CREATE TABLE IF NOT EXISTS stats (
+        CREATE TABLE IF NOT EXISTS activity (
             id integer PRIMARY KEY,
-            doi text,
-            date timestamp
+            date timestamp,
+            action integer DEFAULT 0
         );
         """
         self._logger.info("Creating stats table...")
@@ -212,7 +224,16 @@ class LitWalk:
         return [x[0] for x in cursor.fetchall()]
 
     def get_articles(self, n=None, missing_abstracts=False) -> list[dict[str, Any]]:
-        """Retrieves articles table"""
+        """
+        Retrieves articles table
+
+        Parameters
+        ----------
+        n: int|None
+            Number of articles to retrieve; if "None", returns all (default: None)
+        missing_abstracts: bool
+            If true, only include articles with missing abstracts (default: False)
+        """
         cursor = self.db.cursor()
 
         # all articles

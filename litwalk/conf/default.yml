@@ -1,43 +1,8 @@
 # location where article database will be stored
 data_dir: "~/.lit"
 
-keywords:
-  # exclude keywords with fewer than N characters
-  min_size: 3
-  # minimum number of occurrences of keyword, for it to be used?
-  min_freq: 5
-  # phrases to exclude when parsing/inferring keywords?
-  exclude: []
-
-# additional stop words to include when analyzing article similarity, etc.
-stopwords: ["''", "'s", '000', '10', '11', '11', '12', '13', '14', '15', '16', '17',
-  '18', '19', '20', 'ability', 'able', 'according', 'account', 'accurate', 'accurately',
-  'achieved', 'action', 'additional', 'aim', 'analysis', 'apply', 'approach',
-  'approaches', 'available', 'based', 'compare', 'control', 'demonstrate', 'different',
-  'drive', 'e.g.', 'e.g.', 'effective', 'efficacy', 'effort', 'furthermore', 'help',
-  'identified', 'important', 'improve', 'including', 'involve', 'known', 'level',
-  'line', 'method', 'methods', 'new', 'non', 'novel', 'number', 'occur', 'outcome',
-  'overall', 'possible', 'potential', 'presence', 'present', 'previous', 'previously',
-  'propose', 'provide', 'read', 'recent', 'recently', 'related', 'research', 'results',
-  'reveal', 'review', 'role', 'sample', 'set', 'specific', 'studies', 'study',
-  'suggest', 'type', 'type', 'uncover', 'underlie', 'use', 'useful', 'widely', 'work',
-  'www', 'year']
-
-# TF-IDF parameters
-# See: https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html
-tfidf:
-  # minimum occurrences of token across all articles
-  min_df: 3
-  # maximum ratio of token across all articles
-  max_df: 0.75
-  # maximum number of features to keep in tf-idf matrix
-  max_features: 500
-
-tokenization:
-  # include lemmatization step?
-  lemmatize: true
-  # minimum token length to include
-  min_length: 2
+# location where article markdown notes will be stored
+notes_dir: "~/notes"
 
 # development mode
 dev_mode:
