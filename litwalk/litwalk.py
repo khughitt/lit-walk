@@ -5,10 +5,10 @@ import datetime
 import hashlib
 import logging
 import os
-import pandas as pd
 import random
 import re
 import sqlite3
+import string
 import sys
 import bibtexparser
 from typing import Any, TypedDict
@@ -400,6 +400,10 @@ class LitWalk:
             num_removed = num_before - num_after
             self._logger.warn("Excluding %s articles already present in collection", num_removed)
 
+        # determine note path to use for article
+        for article in articles:
+            article["note"] = self._get_note_path(article, cursor)
+
         # drop any articles that already exist in the database;
         # in the future, may be useful to support _updating_ existing entries..
         if num_after > 0:
@@ -420,9 +424,9 @@ class LitWalk:
         cursor: sqlite3.Cursor
             sqlite3 db cursor
         """
-        fields = ["doi", "isbn", "issn", "pmc", "pmid", "arxivid", "title", "abstract", "booktitle",
-                  "edition", "entrytype", "journal", "keywords", "pages", "author", "volume",
-                  "number", "url", "year", "month", "md5"]
+        fields = ["doi", "isbn", "issn", "pmc", "pmid", "arxivid", "title", "abstract", "note",
+                  "booktitle", "edition", "entrytype", "journal", "keywords", "pages", "author",
+                  "volume", "number", "url", "year", "month", "md5"]
 
         for article in articles:
             entry = {k: None for k in fields}
@@ -459,19 +463,17 @@ class LitWalk:
         """
         Adds a single article to a user's collection
         """
-        sql = '''INSERT INTO articles(doi, isbn, issn, pmc, pmid, arxivid, title, abstract,
+        sql = '''INSERT INTO articles(doi, isbn, issn, pmc, pmid, arxivid, title, abstract, note,
                                       booktitle, edition, entrytype, journal, keywords, pages,
                                       author, volume, number, url, year, month, md5)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
         cursor.execute(sql, article)
 
         self.db.commit()
 
-    def info(self):
+    def info(self) -> dict[str,Any]:
         """
-        Returns basic information about lit setup.
-
-        Note that that info command does ignores "dev_mode", if enabled.
+        Returns basic information about user article collection
         """
         # determine how many articles are missing doi/absract/keywords
         cursor = self.db.cursor()
@@ -499,7 +501,7 @@ class LitWalk:
             }
         }
 
-    def num_articles(self):
+    def num_articles(self) -> int:
         """
         Returns the number of articles present in the user's collection
         """
@@ -516,3 +518,49 @@ class LitWalk:
         cursor.close()
 
         return num_articles
+
+    def _get_note_path(self, article:dict[str, str], cursor:sqlite3.Cursor) -> str:
+        """
+        Determines path to use for markdown note associated with an article
+
+        Path: <first author initial>/<first author><year>_<title><optional multiple suffix>
+        """
+        year = article.get("year", "")
+        title = article.get("title", "")
+
+        if "author" in article:
+            first_author = article["author"].split(",").pop(0).capitalize()
+            dir_ = first_author[0]
+            path = f"{first_author}{year}_{title}"
+        else:
+            dir_ = "Unknown"
+            path = f"{year}_{title}"
+
+        # replace spaces with underscores and ensure that string is a valid filepath
+        # adapted from: https://github.com/django/django/blob/main/django/utils/text.py
+        path = str(path).strip().replace(" ", "_")
+        path = path.replace("\n", "_")
+        path = re.sub(r"(?u)[^-\w.]", "", path)
+
+        # add sub-directory prefix
+        path = os.path.join(dir_, path)
+
+        # add file extension
+        path = path + ".md"
+
+        # add suffix if an article already exists with the same path
+        cursor.execute(f"SELECT COUNT(id) FROM articles WHERE note='{path}';")
+        num_matches = cursor.fetchall()[0][0]
+
+        i = 0
+
+        while num_matches > 0:
+            alt_path = re.sub(r"\.md$", string.ascii_lowercase[i] + ".md", path)
+
+            cursor.execute(f"SELECT COUNT(id) FROM articles WHERE note='{alt_path}';")
+            num_matches = cursor.fetchall()[0][0]
+
+            if num_matches == 0:
+                path = alt_path
+
+        return path

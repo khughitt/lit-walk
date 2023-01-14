@@ -37,7 +37,12 @@ class NotesView(App):
         # open matched article in editor (for now, assumes unique title..)
         for article in self._articles:
             if article["title"] == event.item.main.plain:
-                note_path = os.path.join(self._notes_dir, article['md5'] + ".md")
+                #note_path = os.path.join(self._notes_dir, article['md5'] + ".md")
+                note_path = os.path.join(self._notes_dir, article['note'])
+
+                # create directory if needed
+                if not os.path.exists(os.path.dirname(note_path)):
+                    os.mkdir(os.path.dirname(note_path), mode=0o755)
 
                 # if file doesn't exist, create and add title;
                 # later, this can be extended with a more useful template..
