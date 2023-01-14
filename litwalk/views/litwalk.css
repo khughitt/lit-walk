@@ -1,0 +1,29 @@
+Dropdown {
+  width: 100%;
+}
+
+#search-box {
+    width: 75%;
+}
+
+#lead-text {
+    width: 100%;
+    content-align: center middle;
+    color: $secondary;
+    text-style: bold;
+    padding: 1 1 1 0;
+}
+
+#my-dropdown {
+    max-width: 80%;
+    max-height: 6;
+}
+
+#info-text {
+    padding: 1 8;
+    color: $text;
+    height: auto;
+    width: 100%;
+    text-align: center;
+}
+

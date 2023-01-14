@@ -9,7 +9,8 @@ import datetime
 import logging
 import click
 from typing import Any
-from litwalk.walk import LitWalk
+from litwalk.litwalk import LitWalk
+from litwalk.views import NotesView
 from rich import print
 from rich.padding import Padding
 from rich.table import Table
@@ -91,6 +92,15 @@ def info(litwalk):
     print(f"[light_salmon1]- Missing \"DOI\":[/light_salmon1] {info_['missing']['doi']}")
     print(f"[light_salmon1]- Missing \"abstract\":[/light_salmon1] {info_['missing']['abstract']}")
     print(f"[light_salmon1]- Missing \"keywords\":[/light_salmon1] {info_['missing']['keywords']}")
+
+
+@cli.command
+@click.pass_obj
+def notes(litwalk):
+    """Take notes on an article"""
+    articles = litwalk.get_articles()
+    view = NotesView(articles)
+    view.run()
 
 @cli.command
 @click.argument("query", default="", type=str)
