@@ -38,6 +38,13 @@ class NotesView(App):
         for article in self._articles:
             if article["title"] == event.item.main.plain:
                 note_path = os.path.join(self._notes_dir, article['md5'] + ".md")
+
+                # if file doesn't exist, create and add title;
+                # later, this can be extended with a more useful template..
+                if not os.path.exists(note_path):
+                    with open(note_path, "wt", encoding="utf-8") as fp:
+                        fp.write(f"# {article['title']}\n")
+
                 click.edit(filename=note_path)
                 sys.exit()
 

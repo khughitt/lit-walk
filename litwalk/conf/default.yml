@@ -4,7 +4,6 @@ data_dir: "~/.lit"
 # location where article markdown notes will be stored
 notes_dir: "~/notes"
 
-# development mode
-dev_mode:
-  enabled: false
-  subsample: 500
+# development mode options
+dev_mode: false
+dev_mode_subsample: 500

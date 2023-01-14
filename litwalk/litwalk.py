@@ -8,16 +8,12 @@ import os
 import pandas as pd
 import random
 import re
-import shutil
 import sqlite3
 import sys
-import yaml
 import bibtexparser
 from typing import Any, TypedDict
 from bibtexparser.bparser import BibTexParser
-from pkg_resources import resource_filename
 from rich import print
-from . notesmanager import NotesManager
 
 __version__ = "0.3.0"
 
@@ -38,37 +34,38 @@ class LitWalk:
     """
     LitWalk class definition
     """
-    def __init__(self, config:str, verbose:bool):
+    def __init__(self, data_dir:str, notes_dir:str, dev_mode=False, dev_mode_subsample=100,
+                 verbose=False):
         """
         Initializes a new LitWalk instance.
 
         Parameters
         ----------
-        config: str
-            Path to lit-walk configuration file
         verbose: bool
             If True, verbose logging is enabled
         """
-        # setting logging
+        self.data_dir = data_dir
+        self.notes_dir = notes_dir
+        self.dev_mode = dev_mode
+        self.dev_mode_subsample = dev_mode_subsample
         self.verbose = verbose
+
+        # setting logging
         self._setup_logger()
 
-        # load config
-        self._load_config(config)
-
         # create data and notes directories, if needed
-        if not os.path.exists(self._config['data_dir']):
-            os.makedirs(os.path.expanduser(self._config['data_dir']), mode=0o755)
+        if not os.path.exists(self.data_dir):
+            os.makedirs(os.path.expanduser(self.data_dir), mode=0o755)
 
-        if not os.path.exists(self._config['notes_dir']):
-            os.makedirs(os.path.expanduser(self._config['notes_dir']), mode=0o755)
+        if not os.path.exists(self.notes_dir):
+            os.makedirs(os.path.expanduser(self.notes_dir), mode=0o755)
 
         # initialize database
         self._init_db()
 
     def get_notes_dir(self) -> str:
         """Returns path to base user notes directory"""
-        return self._config["notes_dir"]
+        return self.notes_dir
 
     def _setup_logger(self):
         """
@@ -90,7 +87,7 @@ class LitWalk:
 
         If the database does not already exist, it will be created.
         """
-        dbpath = os.path.join(self._config['data_dir'], 'db.sqlite')
+        dbpath = os.path.join(self.data_dir, 'db.sqlite')
         dbpath = os.path.realpath(os.path.expanduser(os.path.expandvars(dbpath)))
 
         # connect to db
@@ -246,8 +243,8 @@ class LitWalk:
             else:
                 sql = "SELECT * FROM articles;"
         else:
-            if self._config['dev_mode']['enabled']:
-                n = min(n, self._config['dev_mode']['subsample'])
+            if self.dev_mode:
+                n = min(n, self.dev_mode_subsample)
 
             # subset of articles
             if missing_abstracts:
@@ -380,7 +377,7 @@ class LitWalk:
 
         if num_before != num_after:
             num_removed = num_before - num_after
-            self._logger.warn("Excluding %s articles missing both title & abstract fields", 
+            self._logger.warn("Excluding %s articles missing both title & abstract fields",
                               num_removed)
 
         # compute md5 hash for each article title + abstract
@@ -510,8 +507,8 @@ class LitWalk:
 
         sql = "SELECT COUNT(id) FROM articles;"
 
-        if self._config['dev_mode']['enabled']:
-            sql += f" LIMIT {self._config['dev_mode']['subsample']}"
+        if self.dev_mode:
+            sql += f" LIMIT {self.dev_mode_subsample}"
 
         cursor.execute(sql)
         num_articles = cursor.fetchall()[0][0]
@@ -519,34 +516,3 @@ class LitWalk:
         cursor.close()
 
         return num_articles
-
-    def _load_config(self, config:str):
-        """
-        Loads user config / creates one if none exists
-        """
-        infile = os.path.expanduser(config)
-
-        if not os.path.exists(infile):
-            self._logger.info("Generating a new configuration at %s...", infile)
-            self._create_config(infile)
-
-        with open(infile, "rt", encoding="utf-8") as fp:
-            self._config = yaml.load(fp, Loader=yaml.FullLoader)
-
-        # apply any arguments passed in
-        #self._config.update(kwargs)
-
-    def _create_config(self, config_file:str):
-        """
-        Generates a default config file
-        """
-        conf_dir = os.path.dirname(config_file)
-
-        if not os.path.exists(conf_dir):
-            os.makedirs(conf_dir, mode=0o755)
-
-        default_conf = os.path.join(os.path.abspath(resource_filename(__name__, "conf")), "default.yml")
-
-        shutil.copy(default_conf, config_file)
-
-        self._logger.info(f"Default config file generated at {config_file}")

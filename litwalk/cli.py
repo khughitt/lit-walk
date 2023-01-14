@@ -7,6 +7,8 @@ import re
 import sys
 import datetime
 import logging
+import shutil
+import yaml
 import click
 from typing import Any
 from litwalk.litwalk import LitWalk
@@ -14,21 +16,7 @@ from litwalk.views import NotesView
 from rich import print
 from rich.padding import Padding
 from rich.table import Table
-from rich.console import Console
-
-# default config file location
-if os.getenv('XDG_CONFIG_HOME'):
-    conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit-walk")
-elif os.getenv('HOME'):
-    conf_dir = os.path.join(str(os.getenv("HOME")), ".lit-walk")
-else:
-    raise Exception("Unable to infer location of config file automatically")
-    sys.exit()
-
-default_conf = os.path.join(conf_dir, "config.yml")
-
-# initialize rich console
-console = Console()
+from pkg_resources import resource_filename
 
 # initialize logger
 logging.basicConfig(stream=sys.stdout, format='[%(levelname)s] %(message)s')
@@ -39,8 +27,18 @@ print("[cyan]========================================[/cyan]")
 print(":books:", "[bold orchid]lit-walk[/bold orchid]")
 print("[cyan]========================================[/cyan]")
 
+# determine default config path to use
+if os.getenv('XDG_CONFIG_HOME'):
+    conf_dir = os.path.join(str(os.getenv("XDG_CONFIG_HOME")), "lit-walk")
+elif os.getenv('HOME'):
+    conf_dir = os.path.join(str(os.getenv("HOME")), ".lit-walk")
+else:
+    raise Exception("Unable to infer location of config file automatically")
+
+default_config_path = os.path.join(conf_dir, "config.yml")
+
 @click.group()
-@click.option("--config", default=default_conf, help="Path to lit-walk config file to use")
+@click.option("--config", default=default_config_path, help="Path to lit-walk config file to use")
 @click.option("--verbose", is_flag=True, help="If enabled, prints verbose output")
 @click.pass_context
 def cli(ctx, config:str, verbose:bool):
@@ -52,8 +50,23 @@ def cli(ctx, config:str, verbose:bool):
 
     logger.info("Initializing lit-walk...")
 
+    # copy default config, if none found
+    if not os.path.exists(config):
+        if not os.path.exists(conf_dir):
+            os.makedirs(conf_dir, mode=0o755)
+
+        default_cfg = os.path.join(os.path.abspath(
+            resource_filename(__name__, "conf")), "default.yml")
+        shutil.copy(default_cfg, config)
+        logger.info("Default config file generated at %s", config)
+
+    config = os.path.expanduser(config)
+
+    with open(config, "rt", encoding="utf-8") as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)
+
     # initialize lit
-    ctx.obj = LitWalk(config, verbose)
+    ctx.obj = LitWalk(verbose=verbose, **cfg)
 
 @cli.command
 @click.argument("target", type=str)
