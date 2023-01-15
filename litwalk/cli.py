@@ -11,7 +11,7 @@ import shutil
 import yaml
 import click
 from typing import Any
-from litwalk.litwalk import LitWalk
+from litwalk import LitWalk
 from litwalk.views import NotesView
 from rich import print
 from rich.padding import Padding

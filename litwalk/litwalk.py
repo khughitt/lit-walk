@@ -131,7 +131,7 @@ class LitWalk:
             pmc text,
             pmid integer,
             arxivid text,
-            title text NOT NULL,
+            title text,
             abstract text,
             note text,
             booktitle text,
