@@ -23,22 +23,78 @@ class NotesView(App):
     Notes View Textual App class definition
     """
     CSS_PATH = "litwalk.css"
-    BINDINGS = [Binding("ctrl+d", "toggle_dark", "Day/Night")]
+    BINDINGS = [
+        Binding("ctrl+d", "toggle_dark", "Day/Night"),
+        Binding("ctrl+e", "toggle_existing", "Show All/Existing Only?"),
+        Binding("escape", "exit", "Exit")
+    ]
 
     def __init__(self, articles:list[dict[str, Any]], notes_dir:str):
         super().__init__()
         self._articles = articles
         self._notes_dir = notes_dir
 
-        self._items = [DropdownItem(x['title']) for x in articles]
+        # create a list of article ids with existing notes
+        self._existing_ids:list[str] = []
+
+        for article in self._articles:
+            note_path = os.path.join(self._notes_dir, article["note"])
+            if os.path.exists(note_path):
+                self._existing_ids.append(article["id"])
+
+        # create and store DropdownItem instances, indexed by article id
+        self._dropdown_items = {}
+
+        for article in articles:
+            self._dropdown_items[article["id"]] = DropdownItem(article["title"])
+
+        # set initial select options to include all articles
+        self._existing_only = False
+        self._update_select_opts()
+
+        #self._items = [DropdownItem(x["title"]) for x in articles]
+
+    def _update_select_opts(self) -> None:
+        """
+        Updates dropdown items to either include all articles or only those with existing
+        notes
+        """
+        if self._existing_only:
+            self._items = []
+
+            for article_id, dropdown_item in self._dropdown_items.items():
+                if article_id in self._existing_ids:
+                    self._items.append(dropdown_item)
+        else:
+            self._items = self._dropdown_items.values()
+
+    def action_exit(self) -> None:
+        """Exit the application"""
+        self.exit()
+
+    def action_toggle_dark(self) -> None:
+        """Toggle dark mode"""
+        self.dark = not self.dark
+
+    def action_toggle_existing(self) -> None:
+        """Toggle all/existing notes display"""
+        self._existing_only = not self._existing_only
+        self._update_select_opts()
+
+        # refresh downdown options currently displayed?
+        input_elem = self.query_one("#search-box")
+
+        user_input = input_elem.value
+
+        input_elem.value = ""
+        input_elem.value = user_input
 
     def on_auto_complete_selected(self, event: AutoComplete.Selected) -> None:
         """Item selection event handler"""
         # open matched article in editor (for now, assumes unique title..)
         for article in self._articles:
             if article["title"] == event.item.main.plain:
-                #note_path = os.path.join(self._notes_dir, article['md5'] + ".md")
-                note_path = os.path.join(self._notes_dir, article['note'])
+                note_path = os.path.join(self._notes_dir, article["note"])
 
                 # create directory if needed
                 if not os.path.exists(os.path.dirname(note_path)):
@@ -78,10 +134,10 @@ class NotesView(App):
                 Input(id="search-box", placeholder="Search for an article.."),
                 Dropdown(
                     items=get_items,
-                    id="my-dropdown",
+                    id="search-opts",
                 ),
-            ),
+                id="search-autocomplete"
+            )
             #Label("Article", id="search-label"),
-            id="search-container",
         )
         yield Footer()
