@@ -51,7 +51,14 @@ class NotesView(App):
                         fp.write(f"# {article['title']}\n")
 
                 click.edit(filename=note_path)
-                sys.exit()
+                self.exit()
+
+    def on_mount(self) -> None:
+        """
+        Sets the focus to input field at app init
+        """
+        # set focus to search input (?)
+        self.set_focus(self.query_one("#search-box"))
 
     def compose(self) -> ComposeResult:
 
