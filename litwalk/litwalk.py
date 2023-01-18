@@ -549,7 +549,7 @@ class LitWalk:
         path = path + ".md"
 
         # add suffix if an article already exists with the same path
-        cursor.execute(f"SELECT COUNT(id) FROM articles WHERE note='{path}';")
+        cursor.execute(f'SELECT COUNT(id) FROM articles WHERE note="{path}";')
         num_matches = cursor.fetchall()[0][0]
 
         i = 0
@@ -557,7 +557,7 @@ class LitWalk:
         while num_matches > 0:
             alt_path = re.sub(r"\.md$", string.ascii_lowercase[i] + ".md", path)
 
-            cursor.execute(f"SELECT COUNT(id) FROM articles WHERE note='{alt_path}';")
+            cursor.execute(f'SELECT COUNT(id) FROM articles WHERE note="{alt_path}";')
             num_matches = cursor.fetchall()[0][0]
 
             if num_matches == 0:
