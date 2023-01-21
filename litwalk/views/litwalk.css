@@ -1,29 +1,36 @@
-Dropdown {
+/* autocomplete */
+#search-autocomplete {
+}
+
+#search-opts {
   width: 100%;
+  max-width: 80%;
+  max-height: 6;
 }
 
 #search-box {
-    width: 75%;
+  width: 80%;
 }
 
-#lead-text {
-    width: 100%;
+/* title */
+#title-text {
+  width: 100%;
+  content-align: center middle;
+  color: $secondary;
+  text-style: bold;
+  padding: 1 1 1 0;
+}
+
+/* settings */
+#settings-bar {
+  align: right middle;
+  width: 90%;
+  height: 3;
+}
+
+.label {
+    height: 3;
     content-align: center middle;
-    color: $secondary;
-    text-style: bold;
-    padding: 1 1 1 0;
-}
-
-#my-dropdown {
-    max-width: 80%;
-    max-height: 6;
-}
-
-#info-text {
-    padding: 1 8;
-    color: $text;
-    height: auto;
-    width: 100%;
-    text-align: center;
+    width: auto;
 }
 

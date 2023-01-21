@@ -12,10 +12,11 @@ from rich.style import Style
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.renderables._blend_colors import blend_colors
-from textual.widgets import Button, Input, Footer, Label
+from textual.widgets import Checkbox, Input, Footer, Static
 from textual import events
+from textual.reactive import reactive
 from textual_autocomplete._autocomplete import AutoComplete, DropdownItem, Dropdown
 
 class NotesView(App):
@@ -26,8 +27,10 @@ class NotesView(App):
     BINDINGS = [
         Binding("ctrl+d", "toggle_dark", "Day/Night"),
         Binding("ctrl+e", "toggle_existing", "Show All/Existing Only?"),
-        Binding("escape", "exit", "Exit")
+        Binding("ctrl-q", "quit", "Quit")
     ]
+
+    existing_only = reactive(False)
 
     def __init__(self, articles:list[dict[str, Any]], notes_dir:str):
         super().__init__()
@@ -49,17 +52,15 @@ class NotesView(App):
             self._dropdown_items[article["id"]] = DropdownItem(article["title"])
 
         # set initial select options to include all articles
-        self._existing_only = False
         self._update_select_opts()
-
-        #self._items = [DropdownItem(x["title"]) for x in articles]
 
     def _update_select_opts(self) -> None:
         """
         Updates dropdown items to either include all articles or only those with existing
         notes
         """
-        if self._existing_only:
+        #  #if self._existing_only:
+        if self.existing_only:
             self._items = []
 
             for article_id, dropdown_item in self._dropdown_items.items():
@@ -77,11 +78,16 @@ class NotesView(App):
         self.dark = not self.dark
 
     def action_toggle_existing(self) -> None:
-        """Toggle all/existing notes display"""
-        self._existing_only = not self._existing_only
+        """Keyboard handler for toggle existing shortcut"""
+        val = self.query_one("#toggle-existing").value
+        self.query_one("#toggle-existing").value = not val
+
+    def on_checkbox_changed(self) -> None:
+        """Event handler for existing only checkbox toggle"""
+        self.existing_only = not self.existing_only
         self._update_select_opts()
 
-        # refresh downdown options currently displayed?
+        # force refresh of downdown options currently displayed
         input_elem = self.query_one("#search-box")
 
         user_input = input_elem.value
@@ -113,7 +119,7 @@ class NotesView(App):
         """
         Sets the focus to input field at app init
         """
-        # set focus to search input (?)
+        # set focus to search input
         self.set_focus(self.query_one("#search-box"))
 
     def compose(self) -> ComposeResult:
@@ -128,16 +134,18 @@ class NotesView(App):
 
             return ordered
 
-        yield Container(
-            Label("lit-walk Notes", id="lead-text"),
-            AutoComplete(
-                Input(id="search-box", placeholder="Search for an article.."),
-                Dropdown(
-                    items=get_items,
-                    id="search-opts",
-                ),
-                id="search-autocomplete"
-            )
-            #Label("Article", id="search-label"),
+        yield Static("lit-walk / notes", id="title-text")
+        yield AutoComplete(
+            Input(id="search-box", placeholder="Search for an article.."),
+            Dropdown(
+                items=get_items,
+                id="search-opts",
+            ),
+            id="search-autocomplete"
+        )
+        yield Horizontal(
+            Static("Existing only", classes="label"),
+            Checkbox(id="toggle-existing", value=self.existing_only),
+            id='settings-bar'
         )
         yield Footer()
