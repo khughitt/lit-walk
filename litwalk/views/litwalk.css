@@ -28,6 +28,17 @@
   height: 3;
 }
 
+#num-articles-container {
+  align: right middle;
+  width: 88%;
+  color: $primary-lighten-3;
+  height: 1;
+}
+
+#num-articles {
+  content-align: right middle;
+}
+
 .label {
     height: 3;
     content-align: center middle;

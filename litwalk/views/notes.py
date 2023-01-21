@@ -31,9 +31,11 @@ class NotesView(App):
     ]
 
     existing_only = reactive(False)
+    num_articles = reactive(0)
 
     def __init__(self, articles:list[dict[str, Any]], notes_dir:str):
         super().__init__()
+
         self._articles = articles
         self._notes_dir = notes_dir
 
@@ -69,6 +71,9 @@ class NotesView(App):
         else:
             self._items = self._dropdown_items.values()
 
+        self.num_articles = len(self._items)
+        
+
     def action_exit(self) -> None:
         """Exit the application"""
         self.exit()
@@ -94,6 +99,8 @@ class NotesView(App):
 
         input_elem.value = ""
         input_elem.value = user_input
+
+        self.query_one("#num-articles").update(str(f"articles: {self.num_articles}"))
 
     def on_auto_complete_selected(self, event: AutoComplete.Selected) -> None:
         """Item selection event handler"""
@@ -122,6 +129,8 @@ class NotesView(App):
         # set focus to search input
         self.set_focus(self.query_one("#search-box"))
 
+        self.query_one("#num-articles").update(str(f"articles: {self.num_articles}"))
+
     def compose(self) -> ComposeResult:
 
         # auto complete match func
@@ -135,6 +144,10 @@ class NotesView(App):
             return ordered
 
         yield Static("lit-walk / notes", id="title-text")
+        yield Horizontal(
+            Static(id="num-articles"),
+            id="num-articles-container"
+        )
         yield AutoComplete(
             Input(id="search-box", placeholder="Search for an article.."),
             Dropdown(
