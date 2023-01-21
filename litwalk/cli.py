@@ -126,7 +126,7 @@ def walk(litwalk, query:str):
     article = res['article']
 
     if query != "":
-        print(f"[sky_blue1]Including {res['num_filtered']}/{res['num_articles']} articles...[/sky_blue1]")
+        print(f"[sky_blue1]Including {res['num_included']}/{res['num_total']} articles...[/sky_blue1]")
 
     year_str = f"[light_goldenrod3]{article['year']}[/light_goldenrod3]"
     print(f"[bold light_coral]{article['title']}[/bold light_coral] ({year_str})")
