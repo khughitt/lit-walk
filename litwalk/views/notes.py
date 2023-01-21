@@ -27,7 +27,7 @@ class NotesView(App):
     BINDINGS = [
         Binding("ctrl+d", "toggle_dark", "Day/Night"),
         Binding("ctrl+e", "toggle_existing", "Show All/Existing Only?"),
-        Binding("ctrl-q", "quit", "Quit")
+        Binding("ctrl+q", "quit", "Quit")
     ]
 
     existing_only = reactive(False)
