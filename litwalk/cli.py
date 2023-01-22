@@ -116,8 +116,9 @@ def notes(litwalk):
 
 @cli.command
 @click.argument("query", default="", type=str)
+@click.option("--note", is_flag=True, help="Open notes for article?")
 @click.pass_obj
-def walk(litwalk, query:str):
+def walk(litwalk, query:str, note:bool):
     """
     Stochastic article suggestion
     """
@@ -132,11 +133,29 @@ def walk(litwalk, query:str):
     print(f"[bold light_coral]{article['title']}[/bold light_coral] ({year_str})")
     print(f"[bold light_salmon1]{article['author']}[/bold light_salmon1]")
 
-    if article['abstract'] is not None:
-        print(Padding(article['abstract'], (1, 1), style='grey89'))
+    # open note associated with article?
+    if note:
+        note_path = os.path.join(litwalk.notes_dir, article["note"])
 
-    print(f"[sea_green1] - url[/sea_green1]: {article['url']}")
-    print(f"[sea_green1] - doi[/sea_green1]: {article['doi']}")
+        # create directory if needed
+        if not os.path.exists(os.path.dirname(note_path)):
+            os.mkdir(os.path.dirname(note_path), mode=0o755)
+
+        # if file doesn't exist, create and add title;
+        # later, this can be extended with a more useful template..
+        if not os.path.exists(note_path):
+            with open(note_path, "wt", encoding="utf-8") as fp:
+                fp.write(f"# {article['title']}\n")
+
+        click.edit(filename=note_path)
+
+    else:
+        # otherwise, print article overview
+        if article['abstract'] is not None:
+            print(Padding(article['abstract'], (1, 1), style='grey89'))
+
+        print(f"[sea_green1] - url[/sea_green1]: {article['url']}")
+        print(f"[sea_green1] - doi[/sea_green1]: {article['doi']}")
 
 def run():
     """Initialize and run CLI"""
