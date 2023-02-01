@@ -51,7 +51,9 @@ class NotesView(App):
         self._dropdown_items = {}
 
         for article in articles:
-            self._dropdown_items[article["id"]] = DropdownItem(article["title"])
+            # ignore "{" and "}" when searching titles
+            article_title = article["title"].replace("{", "").replace("}", "")
+            self._dropdown_items[article["id"]] = DropdownItem(article_title)
 
         # set initial select options to include all articles
         self._update_select_opts()
@@ -106,7 +108,9 @@ class NotesView(App):
         """Item selection event handler"""
         # open matched article in editor (for now, assumes unique title..)
         for article in self._articles:
-            if article["title"] == event.item.main.plain:
+            article_title = article["title"].replace("{", "").replace("}", "")
+
+            if article_title == event.item.main.plain:
                 note_path = os.path.join(self._notes_dir, article["note"])
 
                 # create directory if needed
@@ -117,7 +121,7 @@ class NotesView(App):
                 # later, this can be extended with a more useful template..
                 if not os.path.exists(note_path):
                     with open(note_path, "wt", encoding="utf-8") as fp:
-                        fp.write(f"# {article['title']}\n")
+                        fp.write(f"# {article_title}\n")
 
                 click.edit(filename=note_path)
                 self.exit()
