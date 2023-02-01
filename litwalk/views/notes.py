@@ -74,7 +74,6 @@ class NotesView(App):
             self._items = self._dropdown_items.values()
 
         self.num_articles = len(self._items)
-        
 
     def action_exit(self) -> None:
         """Exit the application"""

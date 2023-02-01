@@ -1,7 +1,7 @@
 lit-walk
 ========
 
-**Status (Jan 2022)**: Early development & testing.
+**Status (Feb 2023)**: Early development
 
 Overview
 --------
@@ -10,37 +10,32 @@ Overview
 
 _A random walk across the science literature.._
 
-The purpose of this tool, is help one explore their literature collection in a
-stochastic _breadth-first_ manner.
+The purpose of this tool is to facilitate exploration and understanding of the scientific
+literature:
 
-The motivation is help reduce the energy cost associated with deciding exactly _what_
-one should read, and to encourage exploration of topics outside of the graviational
-wells of the topics we are already most familiar with.
+`lit-walk` supports two main functions:
 
-At present, `lit-walk` only uses one's existing bibliography to select articles.
-In the future, this is likely to change.
+1. Stochastic literature review
+2. Markdown note-taking
 
-This is _not_ meant to replace a more traditional thorough reading of the literature. At
-some point, if you want to understand the subject deeply, deeper and more focused
-reading is necessary.
+At present, `lit-walk` is limited to operating on articles in a user's collection, as exported from
+a reference management tool such as [Paperpile](https://paperpile.com/app).
 
-Instead, this can be a fun relatively low-effort way to challenge your basic
-understanding on a wider range of topics, and to expose yourself to a variety of ways of
-thinking about things and approaching problems.
+Long-term, the plan is to develop lit-walk into a general-purpose tool for interacting with science
+literature data, using sources such as [PubMed](https://pubmed.ncbi.nlm.nih.gov/),
+[arXiv](https://arxiv.org/), and [Semantic Scholar](https://www.semanticscholar.org/).
 
-To get the most out of such an approach, a systematic approach to note-taking is
-likely to help.
-
-[Gollum](https://github.com/gollum/gollum) is a free & open-source markdown wiki that is
-easy to configure and works great as a personal knowledgebase.
+In particular, a major goal is to be able to infer network representations of both the "world", and
+the user's own understanding, based on their article collection, and to use the _difference_ between
+these two to guide the user towards topics which might represent "gaps" in ones understanding.
 
 Installation
 ------------
 
-To instead `lit-walk`, clone this github repo and use `pip` to install it:
+To install `lit-walk`, clone this github repo and use `pip` to install it:
 
 ```
-git clone https://github.com/khughitt/lit-walk
+git clone https://github.com/lit-explore/lit-walk
 cd lit walk
 pip install --user .
 ```
@@ -65,6 +60,8 @@ Usage
 To get started, use your reference manager software, or other means, to generate a
 [BibTeX](http://www.bibtex.org/) dump of your library, including all articles that you
 want `lit-walk` to draw from.
+
+Most reference managers should provide a means to export you article collection as BibTeX.
 
 Next, call `lit-walk add`, and point it to the location where you saved your `.bib`
 file:
@@ -96,72 +93,54 @@ Additionally, an entry will be recorded in the `stats` table of `lit-walk` datab
 the future, this will be changed so that the user can decide whether to count the
 article in their stats, or not.
 
+To take notes on an article, run:
+
+```
+lit-walk notes
+```
+
+![Notes search UI](extra/screenshot2.png)
+
+A [Textual](https://github.com/Textualize/textual)-based TUI will be launched, allowing one to
+search through their article collection and select an article to take notes on.
+
+An "existing only" switch can be used to limit search results to only those articles for which notes
+already exist.
+
+Once an article is selected, a markdown file named after the note is opened with the user's default
+editor (`$EDITOR`).
+
+For new notes, an empty file with the article title is shown. Otherwise, if the user opens a
+previously edited note, their existing notes are shown.
+
+To control where notes are stored, you can modify the `notes_dir` config parameter.
+
+It is recommended to keep your notes in a location that is automatically backed up.
+
 Future Plans
 ------------
 
-1. [ ] Use topic modeling or NER to detect informative terms and use this to infer a
-   _topic network_.
-2. [ ] Modify article selection behavior so that it actually performs a random walk
-   across the network, with a parameter to control the average distance travelled (at
-   present, articles are randomly sampled with equal probability)
-3. [ ] Add option to adjust article weights based on node _degree_ and _betweeness
-   centrality_ in an article network.
-  - decreasing the priority for articles that are part of large clusters can help to
-    avoid picking too many things you are already more likely to be familiar with.
-  - on the flip side, one may also want to decrease the odds of choosing articles that
-    are completely removed from what the user knows, and thus, may cover topics for
-    which the user has _little context_ from which to understand its contents.
-  - instead, articles which are not in dead center of highly-connected hubs, and which
-    also are in the direction of some smaller, less-frequented communities of articles
-    may be good candidates since are likely to both provide some familiar context to
-    connect ones understanding to, but also include some less famililar ideas as well.
-  - finally, _betweeness centrality_ may be useful to increase the priority for
-    articles which form "bridges", connecting to large, but mostly unconnected
-    communities in ones collection.
-4. [ ] Basic markdown note-talking support
-  - provide user with option to open an editor for the suggested article, or, for one or
-    more of the topics it covers, in order to take notes as they are reading it.
-  - integration with external knowledgebases / note-taking tools.
-5. [ ] Infer "empirical" / "global" networks from Pubmed, arxiv, etc.
-  - provide support for generate topic networks from the users article collection,
-    arxiv/pubmed, and the user's notes.
-  - differences between these networks can be used for things like article suggestion /
-    infering blindspots, and for getting a sense of the difference between the topics
-    covered in ones article collection, ones notes, and the entirety of the science
-    literature, or some useful subset of it.
+Major goals going forward include:
+
+1. Enable support for interacting with articles _outside_ of a user's collection
+2. Use [lit-embed](https://github.com/lit-explore/lit-embed) topic models to infer user & "global"
+   topic networks, constrained to some search phrase.
+  - "walk" can then adopt a biased random walk approach, keeping track of the location within the
+     user's topic network and biasing article selection towards recently review topics,
+     knowledge gaps, etc.
+  - "inverse" searches can then be supported, suggesting topics and articles based on the difference
+    between the user's knowledge (using the topical content of their article collection as a rough
+    proxy), and the "world" (e.g. PubMed or arXiv), constrained to some topic of interest.
+3. Add annotation data
+  - [lit-embed](https://github.com/lit-explore/lit-embed) topics
+  - [PubTator Central](https://www.ncbi.nlm.nih.gov/research/pubtator) named entities
+  - etc.
+4. Improve note-taking workflow
+  - e.g. group articles by topic/manuscript section via tags, and limit review/note-taking commands
+    the specified subsets
 
 Development
 -----------
 
 `lit-walk` is still in the early stages of development and testing, and is likely to
-change significantly in the coming months.
-
-One of the main goals of `lit-walk` is to develop a useful approach to _embedding_
-articles, in order to assess their similarity and detect communities of related
-articles, and also to infer a _topic network_ corresponding to the topics covered in a
-users collection.
-
-In order to make it simpler to explore alternative approaches to generating such
-embeddings, a `data` command is also provided, which is able to output various datasets
-generated from ones collection as [data packages](https://specs.frictionlessdata.io/data-package/).
-
-To see a list of data types that may be generated, run:
-
-```
-lit-walk data
-```
-
-Notes
------
-
-If `tokenization.lemmatize` is set to `true` in your configuration, then the
-[Stanza NLP Package](https://stanfordnlp.github.io/stanza/) will be used to lemmatize
-the text, prior to tokenization and additional processing.
-
-If you have not used Stanza before, the first time it is called, [English Language
-models](https://stanfordnlp.github.io/stanza/available_models.html) will need to be
-downloaded, which may take some time. This will only take place upon the first call,
-however, and the cached language models will be re-used in subsequent calls.
-
-At present, only Paperpile .bib exports have been tested, and modficiations will likely
-be needed to support other formats
+change significantly in the future.
